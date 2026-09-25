@@ -55,11 +55,14 @@ FastAPI + small static panel
 | `shipments.py` | Shipment-specific source keys and installation HMAC IDs |
 | `storage.py` | Schema migrations, durable identities, private links, public freshness |
 | `app.py` | Operation coalescing, human takeover, sanitized REST state |
+| `notification_config.py` | Private atomic UI settings, validation, environment precedence |
+| `notifications.py` | Explicit MQTT/Telegram tests, bounded timeouts, sanitized results |
 | `panel/` | Local login and package discovery UI |
 | `docker/` | Supervised display/VNC stack and Chromium sandbox profile |
 
 Continuous scheduling, tracking-page observers, broader delivery-state parsing, event history,
-and notification transports are still pending. Discovering a tracking link alone
+and automatic notification dispatch are still pending. Output settings and explicit
+transport tests are implemented. Discovering a tracking link alone
 does not prove a package's state; delivered status requires its own visible label.
 
 ## Ownership and operation rules
@@ -169,6 +172,26 @@ The Dockerfile stores `BUILD_SHA` and `BUILD_DIRTY` as `TRACKER_BUILD_SHA` and
 source metadata. This identifies code provenance; it is not a cryptographic attestation.
 
 ## Documentation and delivery
+
+Notification settings are a bounded JSON PATCH separate from the browser operation
+queue. Secret fields are write-only; validation failures never echo Pydantic input.
+Settings write to a temporary mode-0600 file and atomically replace the saved file.
+Only explicitly supplied environment fields are managed (`model_fields_set`), so
+defaults do not lock the UI. Compose imports optional `.env` without inventing default
+notification environment values. UI saves do not connect to either output.
+
+Explicit tests serialize through a separate lock, reject concurrent settings writes,
+and impose a 15-second outer deadline. MQTT tests use aiomqtt and a non-retained `/test`
+topic. Telegram uses aiohttp against the fixed HTTPS endpoint with redirects disabled;
+provider descriptions and URL-bearing exceptions are never returned or logged. A
+timeout is an uncertain outcome and is not retried. Test status is process-local and
+must not be presented as continuous connection health. Tests do not publish service
+availability, retained state, discovery, or shipment events yet.
+
+The notification tests cover persistence, secret omission/clearing, environment
+ownership (including false/empty values), atomic rejection, cross-origin restrictions,
+request size, no send on save, concurrency, timeouts, rate limits, TLS verification,
+MQTT retention, and Telegram protocol errors using synthetic credentials/responses.
 
 Keep README for users, this guide for maintainers, and AGENTS for short agent rules.
 Update the acceptance record after meaningful local/live checks. Record new scope

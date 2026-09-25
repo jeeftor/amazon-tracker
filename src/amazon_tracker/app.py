@@ -1,6 +1,7 @@
 """Local control plane for the persistent-browser acceptance gate."""
 
 import asyncio
+import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
@@ -11,11 +12,14 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from amazon_tracker.browser import BrowserBusy, BrowserManager, BrowserUnavailable, SessionRequired
 from amazon_tracker.build_info import build_info
 from amazon_tracker.config import Settings
+from amazon_tracker.notification_config import OUTPUTS, NotificationConfig
+from amazon_tracker.notifications import NotificationTests
 from amazon_tracker.session import SessionResult
 from amazon_tracker.storage import Store
 
@@ -29,6 +33,8 @@ class Runtime:
         settings.data_dir.chmod(0o700)
         self.browser = BrowserManager(settings)
         self.store = Store(settings.data_dir)
+        self.notification_config = NotificationConfig(settings.data_dir, settings)
+        self.notification_tests = NotificationTests(self.notification_config)
         self.session = SessionResult("unknown", "not_verified_since_start")
         self.last_verified_at = self.store.last_verified_at()
         self.operation: dict[str, str | None] = {"action": None, "state": "idle", "error": None}
@@ -127,7 +133,10 @@ class Runtime:
                 "last_discovery": self.store.last_discovery(),
                 "discovered_shipments": len(self.store.shipments()),
             },
-            "mqtt": {"state": "not_implemented"},
+            "notifications": {
+                "automatic_announcements": False,
+                "tests": self.notification_tests.status(),
+            },
         }
 
     async def close(self) -> None:
@@ -225,6 +234,58 @@ def create_app(settings: Settings | None = None, *, start_browser: bool = True) 
     async def refresh(request: Request) -> JSONResponse:
         """Queue one bounded scan; repeated requests share the in-flight operation."""
         return enqueue(request, "refresh")
+
+    @app.get("/api/v1/settings/notifications")
+    async def notification_settings(request: Request) -> dict[str, Any]:
+        """Return effective settings with environment ownership and secret-presence flags."""
+        runtime: Runtime = request.app.state.runtime
+        return runtime.notification_config.public()
+
+    @app.patch("/api/v1/settings/notifications")
+    async def save_notification_settings(request: Request) -> JSONResponse:
+        """Save a bounded JSON patch without reflecting invalid secrets in errors."""
+        runtime: Runtime = request.app.state.runtime
+        if runtime.notification_tests.lock.locked():
+            return JSONResponse({"error": "notification_test_running"}, status_code=409)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 16384:
+                return JSONResponse({"error": "settings_request_too_large"}, status_code=413)
+        if runtime.notification_tests.lock.locked():
+            return JSONResponse({"error": "notification_test_running"}, status_code=409)
+        try:
+            patch = json.loads(body)
+            if not isinstance(patch, dict):
+                raise ValueError("invalid_settings")
+            runtime.notification_config.update(patch)
+        except ValidationError:
+            return JSONResponse({"error": "invalid_settings_values"}, status_code=422)
+        except (ValueError, UnicodeError) as exc:
+            code = str(exc)
+            if code not in {
+                "unknown_settings_field",
+                "environment_managed_field",
+                "enabled_output_requires_configuration",
+            }:
+                code = "invalid_settings"
+            return JSONResponse({"error": code}, status_code=422)
+        except OSError:
+            return JSONResponse({"error": "settings_save_failed"}, status_code=500)
+        runtime.notification_tests.results.clear()
+        return JSONResponse(runtime.notification_config.public())
+
+    @app.post("/api/v1/notifications/{output}/test")
+    async def test_notification(output: str, request: Request) -> JSONResponse:
+        """Send a clearly labeled test only when you explicitly request one."""
+        if output not in OUTPUTS:
+            return JSONResponse({"error": "unknown_output"}, status_code=404)
+        runtime: Runtime = request.app.state.runtime
+        try:
+            result = await runtime.notification_tests.run(output)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        return JSONResponse(result, status_code=200 if result["state"] == "sent" else 502)
 
     @app.post("/api/v1/session/{action}", status_code=202)
     async def session_action(action: str, request: Request) -> JSONResponse:

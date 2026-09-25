@@ -30,9 +30,16 @@
       <p id="discovery-detail">Your saved Amazon login is used to check your recent orders.</p>
       <p>Checks are paced to reduce requests. You can select Open Amazon / Login to interrupt a check.</p>
       <ul id="packages"></ul>
-      <p>MQTT and Home Assistant announcements are not connected yet.</p>
+      <p>Automatic announcements are not active yet. You can configure and test your outputs below.</p>
     </section>
   </div>
+  <section id="notifications">
+    <h2>Notifications</h2>
+    <p>Configure MQTT for Home Assistant, Telegram, or both. Save your settings, then select Send test. Saving does not send messages. Automatic delivery announcements are still being built.</p>
+    <p>Environment variables take priority. Your password and bot token are never shown after saving. Leave their fields blank to keep them, or select Clear to remove them.</p>
+    <div class="notification-forms" id="notification-forms"></div>
+    <p id="notification-message" role="status" aria-live="polite">Loading settings…</p>
+  </section>
   <p id="message" role="status" aria-live="polite">Connecting to your tracker…</p>
   <section id="browser-panel" hidden>
     <h2>Amazon browser</h2>

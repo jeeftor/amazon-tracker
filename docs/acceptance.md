@@ -18,19 +18,21 @@ evidence separately from the plan's proposed behavior.
 - Viewer Origin/Host validation and framing restrictions; disposable container regression.
 - GitHub test/Docker workflows, Node 24 action pins, and Dependabot configuration.
 - Version/SHA/dirty build metadata in the footer and status API; stamped local/CI builds.
+- MQTT/Telegram UI settings, explicit environment overrides, private secrets, and setup tests.
 
 ## Gates
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local control, ownership, discovery tests | Passed | 41 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium; failed migration rolls back all DDL |
+| Local control, ownership, discovery, notification tests | Passed | 62 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium; failed migration rolls back all DDL |
 | Container stack | Passed | Image built; UID 1000; profile/state 0700; sandboxed browser startup; noVNC visually connected |
 | A: real Amazon login persistence | Passed | After manual login, the whole container was recreated with the same volume; the protected orders page verified authenticated without another login at 2026-09-25T20:41:31Z |
 | Shipment discovery | Passed for observed link shapes | Two complete recent-order scans, including one after whole-container replacement, returned the same shipment IDs and split-order groups with no unsupported links |
 | B/C: real stop source and transitions | Not started | A real live delivery page; several observed changes without private endpoint replay |
 | Basic delivered status | Passed for observed labels; deployed | User authorized ordinary delivered-status checks separately from live stop counts; authenticated three-page scan confirmed historical deliveries including September 12; sanitized fixtures cover dates, split shipments, hidden labels, and migration |
 | Live stop fixtures and event engine | Gated | Real stop transitions before committing the live-map parser |
-| MQTT, Telegram, Home Assistant | Gated | Proven live source, deterministic event tests, broker/HA restart checks, Telegram setup and delivery |
+| Notification configuration and tests | Implemented; local checks passed | Settings persistence/precedence/secret safety; simulated Telegram responses; disposable authenticated Mosquitto publish, rejected bad password, no retained test replay |
+| Automatic MQTT, Telegram, Home Assistant announcements | Pending | Deterministic event engine, broker/HA restart checks, actual destination setup and delivery; stop counts still need a live source |
 | Security review | Completed for current scope | Two viewer issues fixed; local disposable-container regression passed; Python dependency audit reported no known vulnerabilities; remote deployment remains blocked on authentication |
 | GitHub workflows | Hosted evidence tracked in Actions | actionlint 1.7.12 passed; each pinned JavaScript action declares Node 24; native amd64/arm64 builds and smoke tests passed in [the initial run](https://github.com/jeeftor/amazon-tracker/actions/runs/36189432697); see [latest branch runs](https://github.com/jeeftor/amazon-tracker/actions?query=branch%3Afeature%2Fpersistent-browser) for Python runner fixes and current status |
 
@@ -92,8 +94,19 @@ announcement was inferred. A private SQLite backup was kept before the migration
 - Basic delivered facts can be read from orders now; live-map absence does not block them.
 - US English and amazon.com only for the first adapter.
 - One installation, one account, one persistent browser owner.
-- Complete live acceptance before expanding MQTT/Home Assistant work.
+- Output configuration/setup tests are authorized now; keep automatic sends gated on event evidence.
 - Retain shipment identity and event semantics from the reviewed plan.
 - Add authenticated noVNC proxying before network exposure; local raw noVNC remains a spike.
 - Keep Chromium lock recovery conservative: no blind deletion of lock artifacts.
 - Do not copy source from reference applications with incompatible or unverified licenses.
+
+## Notification setup milestone
+
+MQTT and Telegram settings now persist independently with explicit environment
+overrides and secret-presence flags. A disposable panel was exercised in Headless Shell:
+saved broker fields survived reload, the password input cleared after saving, an
+environment-owned TLS field stayed read-only, and Send test reported broker acceptance.
+An authenticated disposable Mosquitto subscriber received the test; a new subscriber
+received no retained replay, and an incorrect password was rejected. Container
+readiness and viewer security checks passed. Telegram tests use simulated responses;
+no real bot/chat was contacted. Automatic delivery announcements remain disabled.

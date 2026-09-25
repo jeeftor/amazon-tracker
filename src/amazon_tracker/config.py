@@ -5,10 +5,12 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from amazon_tracker.notification_config import NotificationValues
+
 ORDERS_URL = "https://www.amazon.com/your-orders/orders?timeFilter=last30"
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings, NotificationValues):
     """Configure your private browser without storing Amazon credentials."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

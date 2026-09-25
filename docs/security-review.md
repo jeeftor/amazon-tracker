@@ -46,7 +46,34 @@ the distribution-provided noVNC/websockify stack, and future advisories. An OS/b
 image vulnerability scan and a browser-driven end-to-end attack test have not been
 completed. No claim is made about GHCR publication until the publish job runs.
 
-MQTT, Telegram, their credentials/settings API, event persistence, notification retry,
-and remote administration do not exist yet and therefore have not been reviewed.
-Review those changes before enabling them. Re-run the checks after dependency,
-browser, proxy, or deployment changes.
+## Notification setup review
+
+The settings and explicit-test milestone adds MQTT passwords and Telegram tokens to
+the existing local trust boundary. They are stored as plaintext only in private UI
+settings (0600), written by atomic replacement, and omitted from API responses.
+Environment secrets override UI values without being copied to disk. A disabled
+output can still send an explicitly requested setup test; saving/startup never sends.
+
+The new routes retain Host/same-origin/custom-header protections. Settings bodies are
+limited to 16 KiB; unknown keys and invalid types are rejected atomically, and validation
+errors never reflect input. Only configured/not-configured secret flags are returned.
+Forms do not use browser storage. Local processes and Docker peers remain trusted;
+these protections do not substitute for authentication before network exposure.
+
+MQTT accepts a configured broker hostname/IP (including private networks by design),
+uses certificate verification when TLS is enabled, and sends non-retained test payloads
+on a separate topic. Without TLS, broker credentials traverse that network in plaintext.
+Telegram uses the fixed official HTTPS endpoint, rejects malformed token paths,
+disables redirects, bounds response size/time, and discards remote descriptions and
+raw exceptions. The HTTP client does not log token-bearing request URLs by default.
+Explicit tests serialize, honor cooldown/rate limits, and never automatically retry.
+A timeout is reported as uncertain because delivery may already have occurred.
+
+All 62 tests passed with Ruff and strict mypy. New checks cover secret round trips,
+environment precedence, reflected-error prevention, cross-origin tests, bounded bodies,
+concurrent sends, timeouts, synthetic Telegram errors/rate limits, and MQTT test retention.
+A disposable authenticated Mosquitto broker confirmed delivery to a subscriber,
+rejection of an incorrect password, and no replay to a new subscriber. The updated
+locked Python dependency audit found no known vulnerabilities. Actual Telegram delivery,
+the user's broker/HA configuration, automatic event dispatch/retry, and remote
+administration still require separate acceptance and review.

@@ -4,12 +4,13 @@ Your Amazon browser stays in a local Docker service. Planned outputs include MQT
 for Home Assistant and direct Telegram notifications: “Amazon is 3 stops away” and
 “Package delivered.”
 
-**Current milestone: persistent login, package discovery, and delivered status.**
+**Current milestone: persistent login, delivered status, and notification setup.**
 You can open Amazon, complete login or challenges through embedded noVNC, verify your
 session, and discover package tracking links across recent orders. Each shipment gets
 its own stable private ID, including split shipments from one order. Orders-page labels
-such as **Delivered September 12** now populate each package's status. Live stop counts,
-MQTT, Telegram, and Home Assistant announcements are **not implemented yet**.
+such as **Delivered September 12** now populate each package's status. You can configure
+and explicitly test MQTT and Telegram. Live stop counts and automatic delivery
+announcements are **not implemented yet**.
 See the [acceptance record](docs/acceptance.md) for actual local and live evidence.
 
 ## Start your local panel
@@ -93,14 +94,58 @@ reports browser startup failure; diagnose that platform constraint before changi
 
 Current environment settings are listed in [.env.example](.env.example): panel/viewer
 ports, interactive timeout, Chromium sandboxing, and `DISCOVERY_MAX_PAGES` (default 5).
-Your panel currently controls login and manual discovery; notification settings have
-not been added yet.
+Your panel's **Notifications** section configures MQTT and Telegram independently.
+Save settings, then select **Send test**. Saving or opening the panel sends nothing.
+You can test either destination with its enabled switch off. The switches save your
+preference for the upcoming announcement engine; they do not activate automatic sends yet.
 
-The agreed design supports **UI settings and environment variables** for both MQTT
-and Telegram. Explicit environment values take precedence over saved UI values and
-appear as managed fields. Saved secrets will never be echoed by the API or logs.
-MQTT and Telegram can be enabled independently. See the
-[notification design](docs/notifications.md) for planned options and delivery semantics.
+### MQTT
+
+Enter your broker hostname/IP, port, and any username/password. Use TLS when your
+broker supports it (commonly port 8883); certificates and hostnames are verified.
+The default base topic is `amazon/tracker`. **Send test** publishes a JSON `type: test`
+message with QoS 1, without retention, to `amazon/tracker/test`. Subscribe there using
+Home Assistant's MQTT integration or your broker client before testing. This is separate
+from future shipment events, so a setup test cannot appear as a real delivery.
+
+Inside Docker, `localhost` means the tracker container. For a broker on your Docker
+Desktop host, use `host.docker.internal`; for Home Assistant on another machine, use
+that machine's reachable hostname/IP. A broker acknowledgement does not prove your
+Home Assistant automation consumed the message. Confirm it at the destination.
+
+### Telegram
+
+1. Create your bot in Telegram with the official **@BotFather** and copy its token.
+2. Open a chat with your new bot and select **Start** (or add it to your destination
+   group/channel with permission to post).
+3. Enter the token and destination numeric chat ID in the panel. Group IDs can be
+   negative; public channels can use their `@username`.
+4. Save, then select **Send test**. You should receive a clearly labeled test message.
+
+To obtain a numeric chat ID, send your bot a message and inspect `message.chat.id`
+using Telegram's official [getUpdates API](https://core.telegram.org/bots/api#getupdates)
+from a private local client. Do not give your token to a third-party lookup site or
+paste it into an issue. A bot already using a webhook cannot use getUpdates concurrently.
+The tracker sends through the official [sendMessage API](https://core.telegram.org/bots/api#sendmessage).
+
+### Environment overrides and secrets
+
+Precedence is **explicit environment value > saved UI value > default**. Use the
+commented variables in [.env.example](.env.example). Compose loads an optional `.env`
+file (Compose 2.24 or newer); recreate the container after changing it. Values supplied
+directly to the container work too. Environment-owned fields show their variable name
+and are read-only, including explicitly empty values and `false`.
+
+Leave a password/token blank to keep its saved value; select **Clear** to remove it.
+Your API returns only configured/not-configured flags. UI values persist in
+`/data/state/notifications.json`, mode 0600, inside the private volume. This is plaintext
+storage protected by permissions, like your browser profile; include it in private backups.
+Environment secrets are not copied into this file. No credentials are stored in browser storage.
+
+Tests have a short cooldown and do not retry automatically. Telegram rate limits honor
+the provider's retry delay. If a send times out, check the destination before trying
+again: an external service may have accepted the message before the timeout.
+See [notification decisions](docs/notifications.md) for the remaining event/delivery work.
 
 For development setup, testing, architecture, API behavior, and certificate-enabled
 local builds, read [DEVELOPMENT.md](DEVELOPMENT.md). [AGENTS.md](AGENTS.md) contains the
@@ -124,9 +169,12 @@ feature branch pushes do not publish images. See [development](DEVELOPMENT.md#gi
 - `POST /api/v1/refresh`: one paced orders scan; identical requests coalesce.
 - `POST /api/v1/session/open-login`, `/verify`, `/end-interactive`: asynchronous controls.
 - `POST /api/v1/browser/restart`: requires `X-Confirm-Restart: yes`.
+- `GET /api/v1/settings/notifications`: effective values, managed fields, secret flags.
+- `PATCH /api/v1/settings/notifications`: partial update; omit secrets to preserve them.
+- `POST /api/v1/notifications/mqtt/test` or `/telegram/test`: explicit test, at most 15 seconds.
 
 All control requests require `X-Tracker-Request: 1`; browser requests also undergo
-same-origin checks. A submitted operation returns 202; inspect `operation` in status
+same-origin checks. A submitted browser operation returns 202; inspect `operation` in status
 for completion or failure. Duplicate in-flight actions coalesce; conflicting actions
 return 409. Open Login can interrupt an in-flight discovery scan. Discovery is capped
 at 12 order-page navigations per running process per hour. These local request

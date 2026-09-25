@@ -18,6 +18,12 @@ async function refresh() {
     const response = await fetch("/api/v1/status");
     if (!response.ok) throw new Error("Your tracker is unavailable.");
     const state = await response.json();
+    for (const [output, test] of Object.entries(state.notifications.tests)) {
+      const result = byId(`${output}-test-result`);
+      if (result) result.textContent = test.state === "sent"
+        ? `Test accepted${test.checked_at ? ` at ${new Date(test.checked_at).toLocaleTimeString()}` : ""}. Check your destination.`
+        : test.error ? label(test.error) : label(test.state);
+    }
     const build = state.build;
     byId("build").textContent = build
       ? `v${build.version} · ${build.sha ? build.sha.slice(0, 12) : "commit unknown"}`
@@ -113,3 +119,145 @@ byId("restart").addEventListener("click", () => {
 });
 refresh();
 setInterval(refresh, 2000);
+
+const notificationFields = {
+  mqtt: [
+    ["enabled", "Enable MQTT when announcements are available", "checkbox"],
+    ["host", "Broker hostname or IP address", "text"],
+    ["port", "Broker port", "number"],
+    ["username", "Username (optional)", "text"],
+    ["password", "Password (optional)", "password"],
+    ["tls", "Use TLS with certificate verification", "checkbox"],
+    ["base_topic", "Base topic", "text"],
+  ],
+  telegram: [
+    ["enabled", "Enable Telegram when announcements are available", "checkbox"],
+    ["bot_token", "Bot token from @BotFather", "password"],
+    ["chat_id", "Destination chat ID", "text"],
+  ],
+};
+
+function renderNotificationForm(output, settings) {
+  const form = document.createElement("form");
+  form.id = `${output}-form`;
+  const fields = document.createElement("fieldset");
+  const legend = document.createElement("legend");
+  legend.textContent = output === "mqtt" ? "MQTT / Home Assistant" : "Telegram";
+  fields.append(legend);
+  const inputs = [];
+  for (const [suffix, title, type] of notificationFields[output]) {
+    const name = `${output}_${suffix}`;
+    const managed = settings.managed.includes(name);
+    const labelElement = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = type;
+    input.name = name;
+    input.disabled = managed;
+    input.autocomplete = type === "password" ? "new-password" : "off";
+    input.spellcheck = false;
+    if (type === "checkbox") input.checked = settings.values[name];
+    else if (type !== "password") input.value = settings.values[name];
+    if (type === "number") { input.min = "1"; input.max = "65535"; }
+    if (type === "password") input.placeholder = settings.secrets_configured[name] ? "Configured — leave blank to keep" : "Not configured";
+    labelElement.append(document.createTextNode(title), input);
+    fields.append(labelElement);
+    let clear = null;
+    if (type === "password" && !managed) {
+      clear = document.createElement("input");
+      clear.type = "checkbox";
+      const clearLabel = document.createElement("label");
+      clearLabel.append(clear, document.createTextNode(` Clear saved ${suffix.replaceAll("_", " ")}`));
+      fields.append(clearLabel);
+      clear.addEventListener("change", () => { input.disabled = clear.checked; input.value = ""; });
+    }
+    if (managed) {
+      const note = document.createElement("small");
+      note.textContent = `Managed by ${name.toUpperCase()}`;
+      labelElement.append(note);
+    }
+    inputs.push({name, type, input, managed, clear});
+  }
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.textContent = "Save settings";
+  const test = document.createElement("button");
+  test.type = "button";
+  test.textContent = "Send test";
+  test.disabled = !settings.ready[output];
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  actions.append(save, test);
+  const result = document.createElement("p");
+  result.id = `${output}-test-result`;
+  result.className = "test-result";
+  result.setAttribute("role", "status");
+  const hint = document.createElement("p");
+  hint.textContent = output === "mqtt"
+    ? `Tests publish to ${settings.values.mqtt_base_topic}/test without retention. In Docker, use your broker's network address; localhost means this container.`
+    : "Create your bot using @BotFather, then open a chat with your bot and select Start. Enter that chat’s numeric ID (or your channel’s @username). Your bot needs permission to post there.";
+  fields.append(actions, result, hint);
+  form.append(fields);
+  form.addEventListener("input", () => {
+    test.disabled = true;
+    byId("notification-message").textContent = "Save your changes before sending a test.";
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const patch = {};
+    for (const {name, type, input, managed, clear} of inputs) {
+      if (managed) continue;
+      if (type === "password") {
+        if (clear?.checked) patch[name] = "";
+        else if (input.value) patch[name] = input.value;
+      } else {
+        const value = type === "checkbox" ? input.checked : type === "number" ? Number(input.value) : input.value;
+        if (value !== settings.values[name]) patch[name] = value;
+      }
+    }
+    fields.disabled = true;
+    try {
+      const response = await fetch("/api/v1/settings/notifications", {
+        method: "PATCH", headers: {"X-Tracker-Request": "1", "Content-Type": "application/json"},
+        body: JSON.stringify(patch),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(label(body.error));
+      renderNotificationForm(output, body);
+      byId("notification-message").textContent = "Your settings are saved. Select Send test to check your destination. Automatic announcements are not active yet.";
+    } catch (error) {
+      byId("notification-message").textContent = error.message;
+    } finally {
+      inputs.filter(({type}) => type === "password").forEach(({input}) => { input.value = ""; });
+      fields.disabled = false;
+    }
+  });
+  test.addEventListener("click", async () => {
+    fields.disabled = true;
+    byId("notification-message").textContent = "Sending your test…";
+    try {
+      const response = await fetch(`/api/v1/notifications/${output}/test`, {
+        method: "POST", headers: {"X-Tracker-Request": "1"},
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(label(body.error));
+      byId("notification-message").textContent = "Your test was accepted. Check your destination; this does not enable automatic delivery announcements.";
+    } catch (error) {
+      byId("notification-message").textContent = error.message;
+    } finally { fields.disabled = false; }
+    await refresh();
+  });
+  const previous = byId(form.id);
+  if (previous) previous.replaceWith(form);
+  else byId("notification-forms").append(form);
+}
+
+async function loadNotificationSettings() {
+  try {
+    const response = await fetch("/api/v1/settings/notifications");
+    if (!response.ok) throw new Error("Your notification settings are unavailable. Reload to retry.");
+    const settings = await response.json();
+    for (const output of ["mqtt", "telegram"]) renderNotificationForm(output, settings);
+    byId("notification-message").textContent = "Your settings are ready.";
+  } catch (error) { byId("notification-message").textContent = error.message; }
+}
+loadNotificationSettings();

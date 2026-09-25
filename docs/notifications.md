@@ -1,7 +1,13 @@
 # Notification and configuration decisions
 
-These are agreed requirements, **not implemented features**. They extend the original
+These are agreed requirements with implementation status below. They extend the original
 [plan](../PLAN.md) following user requests on September 25, 2026.
+
+**Implemented:** private UI settings, explicit environment overrides, write-only
+secrets, and user-triggered MQTT/Telegram test messages. Both outputs remain quiet
+on save/startup. Test status does not claim an ongoing connection.
+**Pending:** automatic event generation/dispatch, MQTT state/availability/discovery,
+Home Assistant automation, live stop counts, and real destination acceptance.
 
 ## Outputs
 
@@ -34,9 +40,9 @@ state instead. Do not put secrets in browser storage, logs, diagnostics, or erro
 | MQTT | Enabled, host, port, username, password, TLS, base topic |
 | Telegram | Enabled, bot token, destination chat ID |
 
-Use the original plan's `MQTT_*` names. Proposed Telegram names are `TELEGRAM_ENABLED`,
-`TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID`. They are not accepted configuration yet.
-The panel will show each output's status and provide an explicit test action. Sending
+Use the original plan's `MQTT_*` names. Telegram names are `TELEGRAM_ENABLED`,
+`TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID`. These settings are accepted now.
+The panel shows each output's test status and provides an explicit test action. Sending
 a test notification requires the user to request that action; ordinary saving or
 opening settings must not send a message.
 
@@ -57,7 +63,9 @@ announce historical deliveries as new just because the tracker discovered them t
 
 ## Reliability and remaining gates
 
-The source must first prove real live tracking transitions. Then build the transactional
+The user's request to configure outputs permits setup and explicit transport tests
+before live-map acceptance. Automatic announcements remain disabled. The source must
+first prove real live tracking transitions for stop announcements. Then build the transactional
 event engine and output delivery records before adding notification transports. A
 notification outage must not interrupt Amazon observation or discard current state.
 Define expiry and retry policies so reconnection does not announce old stop counts.
