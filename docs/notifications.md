@@ -52,6 +52,8 @@ Record real increases in stop count but suppress spoken/direct notices about inc
 by default. Preserve missing counts as null, never a fabricated zero. Delivered and
 arriving-next transitions should produce one new event. UI state and transient
 notifications have different retention and replay behavior.
+An initial scan of already-delivered packages establishes a quiet baseline. Do not
+announce historical deliveries as new just because the tracker discovered them today.
 
 ## Reliability and remaining gates
 

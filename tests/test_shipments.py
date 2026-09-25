@@ -91,5 +91,5 @@ def test_version_one_migrates_without_losing_session_history(tmp_path: Path) -> 
     store = Store(tmp_path)
     assert store.last_verified_at() == "saved-time"
     assert store.shipments() == []
-    assert store.connection.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert store.connection.execute("PRAGMA user_version").fetchone()[0] == 3
     store.close()

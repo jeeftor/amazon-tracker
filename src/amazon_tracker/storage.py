@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from amazon_tracker.delivery import DeliveryStatus
 from amazon_tracker.discovery import DiscoveryResult
 from amazon_tracker.shipments import shipment_candidate
 
@@ -22,7 +23,7 @@ class Store:
         self.connection = sqlite3.connect(state_dir / "tracker.sqlite3")
         self.connection.execute("PRAGMA journal_mode=WAL")
         version = self.connection.execute("PRAGMA user_version").fetchone()[0]
-        if version > 2:
+        if version > 3:
             self.connection.close()
             raise RuntimeError("Database schema is newer than this application")
         with self.connection:
@@ -43,7 +44,14 @@ class Store:
                 "complete INTEGER NOT NULL, links_seen INTEGER NOT NULL, "
                 "shipments_seen INTEGER NOT NULL, unsupported_links INTEGER NOT NULL)"
             )
-            self.connection.execute("PRAGMA user_version=2")
+            if version < 3:
+                self.connection.execute(
+                    "ALTER TABLE shipments ADD COLUMN delivery_status "
+                    "TEXT NOT NULL DEFAULT 'unknown'"
+                )
+                for column in ("delivery_date_label", "status_observed_at", "status_checked_at"):
+                    self.connection.execute(f"ALTER TABLE shipments ADD COLUMN {column} TEXT")
+            self.connection.execute("PRAGMA user_version=3")
         secret_file = state_dir / "installation-secret"
         if not secret_file.exists():
             if self.connection.execute("SELECT COUNT(*) FROM shipments").fetchone()[0]:
@@ -85,26 +93,49 @@ class Store:
     def save_discovery(self, result: DiscoveryResult, observed_at: str) -> None:
         """Upsert distinct shipments atomically; absence never means delivered or cancelled."""
         candidates = {}
+        statuses: dict[str, DeliveryStatus | None] = {}
         unsupported = 0
         for link in result.links:
             candidate = shipment_candidate(link, self.secret)
             if candidate is None:
                 unsupported += 1
             else:
+                status = result.statuses.get(link)
+                if candidate.shipment_id in statuses and statuses[candidate.shipment_id] != status:
+                    status = DeliveryStatus()
+                statuses[candidate.shipment_id] = status
                 candidates[candidate.shipment_id] = candidate
         with self.connection:
             for candidate in candidates.values():
+                observation = statuses[candidate.shipment_id]
+                status = observation or DeliveryStatus()
+                checked_at = observed_at if observation is not None else None
+                confirmed_at = observed_at if status.status == "delivered" else None
                 self.connection.execute(
-                    "INSERT INTO shipments VALUES (?, ?, ?, ?, ?) "
+                    "INSERT INTO shipments (shipment_id, order_id, tracking_url, first_seen_at, "
+                    "last_seen_at, delivery_status, delivery_date_label, status_observed_at, "
+                    "status_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                     "ON CONFLICT(shipment_id) DO UPDATE SET "
                     "order_id=COALESCE(excluded.order_id, shipments.order_id), "
-                    "tracking_url=excluded.tracking_url, last_seen_at=excluded.last_seen_at",
+                    "tracking_url=excluded.tracking_url, last_seen_at=excluded.last_seen_at, "
+                    "delivery_status=CASE WHEN excluded.delivery_status='delivered' "
+                    "THEN excluded.delivery_status ELSE shipments.delivery_status END, "
+                    "delivery_date_label=COALESCE(excluded.delivery_date_label, "
+                    "shipments.delivery_date_label), "
+                    "status_observed_at=COALESCE(excluded.status_observed_at, "
+                    "shipments.status_observed_at), "
+                    "status_checked_at=COALESCE(excluded.status_checked_at, "
+                    "shipments.status_checked_at)",
                     (
                         candidate.shipment_id,
                         candidate.order_id,
                         candidate.tracking_url,
                         observed_at,
                         observed_at,
+                        status.status,
+                        status.date_label,
+                        confirmed_at,
+                        checked_at,
                     ),
                 )
             self.connection.execute(
@@ -144,19 +175,25 @@ class Store:
     def shipments(self, *, revalidated: bool = False) -> list[dict[str, Any]]:
         """Expose candidate packages with explicit unknown delivery status and freshness."""
         rows = self.connection.execute(
-            "SELECT shipment_id, order_id, last_seen_at FROM shipments ORDER BY shipment_id"
+            "SELECT shipment_id, order_id, last_seen_at, delivery_status, delivery_date_label, "
+            "status_observed_at, status_checked_at FROM shipments "
+            "ORDER BY delivery_status='delivered', shipment_id"
         ).fetchall()
         now = datetime.now(UTC)
         return [
             {
                 "shipment_id": row[0],
                 "order_id": row[1],
-                "status": "unknown",
+                "status": row[3],
+                "delivery_date_label": row[4],
+                "status_observed_at": row[5],
+                "status_checked_at": row[6],
                 "tracking_visibility": "unknown",
                 "stops_remaining": None,
                 "observed_at": row[2],
                 "stale_after_seconds": 1800,
                 "is_stale": not revalidated
+                or (row[3] == "delivered" and row[5] != row[2])
                 or (now - datetime.fromisoformat(row[2])).total_seconds() > 1800,
             }
             for row in rows

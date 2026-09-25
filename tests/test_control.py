@@ -173,7 +173,7 @@ def test_schema_and_private_permissions(tmp_path: Path) -> None:
     """Persist history in WAL mode and private directories."""
     store = Store(tmp_path)
     assert store.connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-    assert store.connection.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert store.connection.execute("PRAGMA user_version").fetchone()[0] == 3
     assert (tmp_path / "state").stat().st_mode & 0o777 == 0o700
     store.close()
 

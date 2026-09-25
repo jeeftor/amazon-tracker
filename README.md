@@ -4,10 +4,11 @@ Your Amazon browser stays in a local Docker service. Planned outputs include MQT
 for Home Assistant and direct Telegram notifications: “Amazon is 3 stops away” and
 “Package delivered.”
 
-**Current milestone: persistent login and multiple-package discovery (phases 0–2).**
+**Current milestone: persistent login, package discovery, and delivered status.**
 You can open Amazon, complete login or challenges through embedded noVNC, verify your
 session, and discover package tracking links across recent orders. Each shipment gets
-its own stable private ID, including split shipments from one order. Live stop counts,
+its own stable private ID, including split shipments from one order. Orders-page labels
+such as **Delivered September 12** now populate each package's status. Live stop counts,
 MQTT, Telegram, and Home Assistant announcements are **not implemented yet**.
 See the [acceptance record](docs/acceptance.md) for actual local and live evidence.
 
@@ -26,14 +27,20 @@ interface. If those ports are occupied, change `PANEL_PORT` and `NOVNC_PORT` in 
 3. Once the panel confirms authentication, restart the whole container:
    `docker compose restart tracker`.
 4. Select **Verify login** again. Confirm you do not need to sign in again.
-5. Select **Find packages**. The scan follows recent-order pagination with 30 seconds
+5. Select **Check packages**. The scan follows recent-order pagination with 30 seconds
    between page navigations. The panel reports partial scans and unsupported links.
 
 Discovery currently runs on demand. It does not yet schedule automatic tracking.
-Packages show **delivery status not checked** until tracking-page validation is added;
-finding a link does not establish whether that package is active or delivered.
+Your scan reads the delivery label from each package's own card. Recognized delivered
+labels show their date; other labels currently show **Delivery status not recognized**.
+Old records show **Delivery status not checked** until their first status scan.
+Relative labels such as “today” include the observation time so they do not silently
+change meaning tomorrow. Month/day labels retain Amazon's wording without guessing a year.
 Repeated scans update existing packages instead of creating duplicates. Missing links
 do not cause packages to be marked delivered, cancelled, or deleted.
+If a later scan cannot confirm a previously observed delivery, its saved delivered
+fact remains visible with a needs-refresh label. Historical deliveries do not generate
+announcements; no notification event engine is enabled yet.
 
 The verifier requires a protected orders page with visible orders/search controls,
 or both an orders-page marker and a signed-in account marker for the older layout.

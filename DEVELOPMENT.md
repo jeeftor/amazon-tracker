@@ -50,16 +50,17 @@ FastAPI + small static panel
 | `config.py` | Validated settings and fixed US orders URL |
 | `browser.py` | Persistent context, interactive leases, paced discovery, ownership |
 | `session.py` | Login/challenge/protected-orders classification |
-| `discovery.py` | Visible tracking anchors and constrained pagination |
+| `discovery.py` | Visible tracking anchors, package-scoped delivery labels, pagination |
+| `delivery.py` | Conservative delivered-label normalization |
 | `shipments.py` | Shipment-specific source keys and installation HMAC IDs |
 | `storage.py` | Schema migrations, durable identities, private links, public freshness |
 | `app.py` | Operation coalescing, human takeover, sanitized REST state |
 | `panel/` | Local login and package discovery UI |
 | `docker/` | Supervised display/VNC stack and Chromium sandbox profile |
 
-Continuous scheduling, tracking-page observers, delivery-state parsing, event history,
-and notification transports are still pending. Do not imply that discovering a
-tracking link proves a package is active, out for delivery, or delivered.
+Continuous scheduling, tracking-page observers, broader delivery-state parsing, event history,
+and notification transports are still pending. Discovering a tracking link alone
+does not prove a package's state; delivered status requires its own visible label.
 
 ## Ownership and operation rules
 
@@ -90,12 +91,33 @@ IDs are namespaced HMAC-SHA256 values truncated to 16 hex characters. The 32-byt
 installation secret is stored at `/data/state/installation-secret` with mode 0600.
 Do not rotate or regenerate it when shipment records exist. Schema version 2 adds
 shipments and discovery history to the version 1 session database.
+Schema version 3 adds delivered state/date labels, last confirmed observation, and
+last status-check timestamps without changing identities or private URLs.
 
-Tracking URLs remain private in SQLite. REST exposes IDs, grouping IDs, unknown
-delivery status, null stops, observation time, and staleness. Loaded records start
+Tracking URLs remain private in SQLite. REST exposes IDs, grouping IDs, recognized
+delivered status/date labels, null stops, observation time, and staleness. Loaded records start
 stale until revalidated during the current process lifetime. Absent packages are
 not deleted or marked delivered. Shipment retirement/retention awaits the delivery
 state engine; history tables are currently capped at 1,000 rows each.
+
+## Basic delivered status
+
+The user's September 25 clarification permits ordinary delivered-status checks before
+live stop-count validation. The original live-map gate still applies to stop parsing.
+Discovery reads `.delivery-box__primary-text` only within the tracking link's nearest
+`.delivery-box`. It requires one visible label and one distinct visible tracking link
+in that box. It never copies a status from the containing order or a neighboring package.
+Missing, conflicting, hidden, or unfamiliar labels yield unknown evidence.
+
+Only complete delivered month/day or today/yesterday labels are recognized currently.
+Calendar validation rejects impossible month/day combinations; no year or delivery
+time is invented. Relative wording is displayed with its observation time. The parser
+does not persist arbitrary card text, products, addresses, or tracking numbers.
+
+An unknown observation does not erase a saved delivered fact or refresh its confirmed
+timestamp. Such a saved fact is marked stale when the latest scan fails to revalidate
+it. Initial historical deliveries establish dashboard state; they are not new delivery
+events. Return/cancellation handling and notification transitions remain separate work.
 
 ## Adding parser behavior
 

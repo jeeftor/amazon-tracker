@@ -43,8 +43,17 @@ async function refresh() {
       const packages = await packagesResponse.json();
       byId("packages").replaceChildren(...packages.map((shipment) => {
         const item = document.createElement("li");
-        item.textContent = `${shipment.shipment_id} — delivery status not checked`
-          + (shipment.is_stale ? " (discovery needs refresh)" : "");
+        let description = shipment.status_checked_at
+          ? "Delivery status not recognized" : "Delivery status not checked";
+        if (shipment.status === "delivered") {
+          const date = shipment.delivery_date_label;
+          const checked = new Date(shipment.status_observed_at).toLocaleString();
+          description = date === "today" || date === "yesterday"
+            ? `Delivered — Amazon said “${date}” when checked ${checked}`
+            : `Delivered ${date || ""}`.trim();
+        }
+        item.textContent = `${shipment.shipment_id} — ${description}`
+          + (shipment.is_stale ? " (saved result; needs refresh)" : "");
         return item;
       }));
     }

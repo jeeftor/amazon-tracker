@@ -12,7 +12,8 @@ from typing import IO, Literal
 from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
 
 from amazon_tracker.config import ORDERS_URL, Settings
-from amazon_tracker.discovery import DiscoveryResult, next_orders_page, tracking_links
+from amazon_tracker.delivery import DeliveryStatus
+from amazon_tracker.discovery import DiscoveryResult, next_orders_page, tracking_observations
 from amazon_tracker.session import SessionResult, inspect_session
 
 
@@ -195,7 +196,7 @@ class BrowserManager:
             page = await self.page("orders")
             url: str | None = ORDERS_URL
             visited: set[str] = set()
-            links: list[str] = []
+            observations: dict[str, DeliveryStatus] = {}
             for _ in range(self.settings.discovery_max_pages):
                 if url is None or url in visited:
                     break
@@ -211,9 +212,12 @@ class BrowserManager:
                     )
                     await page.bring_to_front()
                     raise SessionRequired(session)
-                links.extend(await tracking_links(page))
+                for link, status in (await tracking_observations(page)).items():
+                    if link in observations and observations[link] != status:
+                        status = DeliveryStatus()
+                    observations[link] = status
                 url = await next_orders_page(page)
-            return DiscoveryResult(list(dict.fromkeys(links)), len(visited), url is None)
+            return DiscoveryResult(list(observations), len(visited), url is None, observations)
 
     async def _pace_discovery(self) -> None:
         """Space full orders navigations by at least thirty seconds."""

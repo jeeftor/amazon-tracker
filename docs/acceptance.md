@@ -14,6 +14,7 @@ evidence separately from the plan's proposed behavior.
 - Loopback port bindings, private profile permissions, sanitized diagnostics.
 - Bounded, paced recent-order pagination and separate identities for split shipments.
 - Schema 2 with persistent HMAC identities, private links, and public freshness metadata.
+- Schema 3 with package-scoped delivered labels and separate check/confirmation timestamps.
 - Viewer Origin/Host validation and framing restrictions; disposable container regression.
 - GitHub test/Docker workflows, Node 24 action pins, and Dependabot configuration.
 
@@ -21,18 +22,20 @@ evidence separately from the plan's proposed behavior.
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local control, ownership, discovery tests | Passed | 36 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
+| Local control, ownership, discovery tests | Passed | 40 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
 | Container stack | Passed | Image built; UID 1000; profile/state 0700; sandboxed browser startup; noVNC visually connected |
 | A: real Amazon login persistence | Passed | After manual login, the whole container was recreated with the same volume; the protected orders page verified authenticated without another login at 2026-09-25T20:41:31Z |
 | Shipment discovery | Passed for observed link shapes | Two complete recent-order scans, including one after whole-container replacement, returned the same shipment IDs and split-order groups with no unsupported links |
 | B/C: real stop source and transitions | Not started | A real live delivery page; several observed changes without private endpoint replay |
-| Parser fixtures and event engine | Gated | Sanitized real observations before committing Amazon parser behavior |
+| Basic delivered status | Passed for observed labels; deployed | User authorized ordinary delivered-status checks separately from live stop counts; authenticated three-page scan confirmed historical deliveries including September 12; sanitized fixtures cover dates, split shipments, hidden labels, and migration |
+| Live stop fixtures and event engine | Gated | Real stop transitions before committing the live-map parser |
 | MQTT, Telegram, Home Assistant | Gated | Proven live source, deterministic event tests, broker/HA restart checks, Telegram setup and delivery |
 | Security review | Completed for current scope | Two viewer issues fixed; local disposable-container regression passed; Python dependency audit reported no known vulnerabilities; remote deployment remains blocked on authentication |
 | GitHub workflows | Hosted evidence tracked in Actions | actionlint 1.7.12 passed; each pinned JavaScript action declares Node 24; native amd64/arm64 builds and smoke tests passed in [the initial run](https://github.com/jeeftor/amazon-tracker/actions/runs/36189432697); see [latest branch runs](https://github.com/jeeftor/amazon-tracker/actions?query=branch%3Afeature%2Fpersistent-browser) for Python runner fixes and current status |
 
 Synthetic persistent-cookie tests do not establish Amazon session persistence.
-No claims about real stop counts, deliveries, or Home Assistant acceptance are made.
+No claims about real stop counts, new-delivery event transitions, or Home Assistant
+acceptance are made.
 
 ## Live observation: access notice
 
@@ -70,8 +73,22 @@ remaining trust boundaries, and the limits of dependency auditing. The new viewe
 protections are deployed locally. [Notification decisions](notifications.md) describe
 the agreed MQTT/Telegram requirements; those transports are still unimplemented.
 
+## Basic delivered-status milestone
+
+On September 25 the user clarified that delivered-package status must not wait for a
+live map. Inspection of the authenticated orders layout confirmed that a package's
+own `.delivery-box` contains its `.delivery-box__primary-text` status. The new adapter
+reads that narrow scope and rejects ambiguous cards. No account text or raw identifiers
+were copied into fixtures.
+
+After deploying schema 3, the scan completed at 2026-09-25T21:24:36Z. Existing package
+IDs were preserved, historical delivered labels (including September 12) appeared in
+REST, and the one unrecognized label remained unknown. No stop count or new-delivery
+announcement was inferred. A private SQLite backup was kept before the migration.
+
 ## Decisions to carry forward
 
+- Basic delivered facts can be read from orders now; live-map absence does not block them.
 - US English and amazon.com only for the first adapter.
 - One installation, one account, one persistent browser owner.
 - Complete live acceptance before expanding MQTT/Home Assistant work.

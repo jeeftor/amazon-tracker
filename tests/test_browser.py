@@ -9,9 +9,45 @@ from playwright.async_api import Route
 
 from amazon_tracker.browser import BrowserManager, BrowserUnavailable
 from amazon_tracker.config import ORDERS_URL, Settings
+from amazon_tracker.delivery import DeliveryStatus
+from amazon_tracker.discovery import tracking_observations
 from amazon_tracker.session import inspect_session
 
 pytestmark = pytest.mark.browser
+
+
+async def test_delivery_labels_belong_to_individual_packages(manager: BrowserManager) -> None:
+    """Split orders, hidden labels, product text, and ambiguous cards cannot bleed status."""
+    page = await manager.page("orders")
+    await page.goto(ORDERS_URL)
+    await page.set_content("""
+      <div class="order-card">
+        <div class="delivery-box">
+          <span class="delivery-box__primary-text">Delivered September 12</span>
+          <a href="/track?shipmentId=one">Track package</a>
+        </div>
+        <div class="delivery-box">
+          <span class="delivery-box__primary-text">Arriving tomorrow</span>
+          <a href="/track?shipmentId=two">Track package</a>
+        </div>
+        <div class="delivery-box">
+          <span hidden class="delivery-box__primary-text">Delivered September 12</span>
+          <p>Delivered September 12</p>
+          <a href="/track?shipmentId=three">Track package</a>
+        </div>
+        <div class="delivery-box">
+          <span class="delivery-box__primary-text">Delivered September 12</span>
+          <a href="/track?shipmentId=four">Track package</a>
+          <a href="/track?shipmentId=five">Track package</a>
+        </div>
+      </div>
+    """)
+    statuses = await tracking_observations(page)
+    assert statuses["https://www.amazon.com/track?shipmentId=one"] == DeliveryStatus(
+        "delivered", "September 12"
+    )
+    assert len(statuses) == 5
+    assert all(value == DeliveryStatus() for url, value in statuses.items() if "=one" not in url)
 
 
 @pytest.fixture

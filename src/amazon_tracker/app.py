@@ -120,7 +120,7 @@ class Runtime:
             },
             "operation": self.operation,
             "tracker": {
-                "state": "discovery_only",
+                "state": "orders_status",
                 "last_discovery": self.store.last_discovery(),
                 "discovered_shipments": len(self.store.shipments()),
             },
