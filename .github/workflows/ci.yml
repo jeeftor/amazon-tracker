@@ -35,6 +35,17 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
       - run: uv run playwright install --with-deps chromium --only-shell
+      - name: Permit the fixture browser's sandbox on this runner
+        run: |
+          browser_binary=$(find "$HOME/.cache/ms-playwright" -type f -name chrome-headless-shell -print -quit)
+          test -n "$browser_binary"
+          sudo tee /etc/apparmor.d/amazon-tracker-fixtures > /dev/null <<EOF
+          abi <abi/4.0>,
+          profile amazon-tracker-fixtures "$browser_binary" flags=(unconfined) {
+            userns,
+          }
+          EOF
+          sudo apparmor_parser -r /etc/apparmor.d/amazon-tracker-fixtures
       - run: make check
       - name: Audit locked runtime Python dependencies
         if: matrix.python == '3.12'

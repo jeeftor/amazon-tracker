@@ -147,6 +147,12 @@ acceptance. Check the actual GitHub run for the pushed commit before reporting C
 on the default branch once merged. It checks Python 3.12 and 3.14, audits locked runtime
 Python dependencies with pip-audit, and builds/smoke-tests Linux amd64 and arm64 images
 on native hosted runners. Tests use disposable profiles and never receive Amazon credentials.
+The Ubuntu runner installs an AppArmor exception for the exact downloaded fixture
+browser path, permitting its user-namespace sandbox. This follows
+[Chromium's scoped-profile guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+It does not change your development machine, disable the host's global policy, or
+disable Chromium sandboxing. Fixture startup failures include isolated launch details;
+production errors remain sanitized.
 `scripts/container_smoke.py IMAGE` starts and removes its own disposable container;
 it checks browser readiness, storage permissions, API Host validation, viewer Origin/Host
 validation, and framing headers. It does not mount your existing volume.

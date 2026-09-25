@@ -29,7 +29,7 @@ evidence separately from the plan's proposed behavior.
 | Parser fixtures and event engine | Gated | Sanitized real observations before committing Amazon parser behavior |
 | MQTT, Telegram, Home Assistant | Gated | Proven live source, deterministic event tests, broker/HA restart checks, Telegram setup and delivery |
 | Security review | Completed for current scope | Two viewer issues fixed; local disposable-container regression passed; Python dependency audit reported no known vulnerabilities; remote deployment remains blocked on authentication |
-| GitHub workflows | Locally validated; hosted run pending | actionlint 1.7.12 passed; each pinned JavaScript action declares Node 24; native amd64/arm64 builds and conditional GHCR publication configured |
+| GitHub workflows | Hosted evidence tracked in Actions | actionlint 1.7.12 passed; each pinned JavaScript action declares Node 24; native amd64/arm64 builds and smoke tests passed in [the initial run](https://github.com/jeeftor/amazon-tracker/actions/runs/36189432697); see [latest branch runs](https://github.com/jeeftor/amazon-tracker/actions?query=branch%3Afeature%2Fpersistent-browser) for Python runner fixes and current status |
 
 Synthetic persistent-cookie tests do not establish Amazon session persistence.
 No claims about real stop counts, deliveries, or Home Assistant acceptance are made.

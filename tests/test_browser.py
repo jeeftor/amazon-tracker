@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from playwright.async_api import Route
 
-from amazon_tracker.browser import BrowserManager
+from amazon_tracker.browser import BrowserManager, BrowserUnavailable
 from amazon_tracker.config import ORDERS_URL, Settings
 from amazon_tracker.session import inspect_session
 
@@ -18,10 +18,14 @@ pytestmark = pytest.mark.browser
 async def manager(tmp_path: Path) -> AsyncIterator[BrowserManager]:
     """Launch an isolated browser profile and intercept all external requests."""
     browser = BrowserManager(Settings(data_dir=tmp_path, browser_headless=True))
-    await browser.start()
-    assert browser.context is not None
-    await browser.context.route("**/*", lambda route: route.fulfill(body="<html></html>"))
     try:
+        try:
+            await browser.start()
+        except BrowserUnavailable as error:
+            # This profile is synthetic; preserve launch diagnostics only in test failures.
+            pytest.fail(f"Isolated fixture browser failed to start: {error.__context__}")
+        assert browser.context is not None
+        await browser.context.route("**/*", lambda route: route.fulfill(body="<html></html>"))
         yield browser
     finally:
         await browser.close()
