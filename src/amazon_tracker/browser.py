@@ -36,6 +36,7 @@ class BrowserManager:
         self.interactive_until: float = 0
         self.error: str | None = None
         self.pages: dict[str, Page] = {}
+        self.interactive_page: Page | None = None
 
     @property
     def running(self) -> bool:
@@ -96,6 +97,7 @@ class BrowserManager:
         """Clear stale page handles after a browser crash or close."""
         self.context = None
         self.pages.clear()
+        self.interactive_page = None
         self.mode = "idle"
         self.interactive_until = 0
         self.error = "browser_disconnected"
@@ -137,7 +139,10 @@ class BrowserManager:
         """Give your interactive browser priority and open Amazon orders once."""
         async with self.ownership(interactive_allowed=True):
             await self.start()
-            page = await self.page("admin")
+            page = self.interactive_page
+            if page is None or page.is_closed():
+                page = await self.page("admin")
+            self.interactive_page = page
             self.mode = "interactive"
             self.interactive_until = time.monotonic() + self.settings.interactive_timeout_seconds
             await page.bring_to_front()
@@ -154,11 +159,14 @@ class BrowserManager:
             if result.state == "authenticated":
                 self.mode = "idle"
                 self.interactive_until = 0
+                self.interactive_page = None
             elif result.state in {"challenge", "needs_login"}:
                 self.mode = "interactive"
+                self.interactive_page = page
                 self.interactive_until = (
                     time.monotonic() + self.settings.interactive_timeout_seconds
                 )
+                await page.bring_to_front()
             return result
 
     async def end_interactive(self) -> None:

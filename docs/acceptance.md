@@ -17,7 +17,7 @@ evidence separately from the plan's proposed behavior.
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local control and ownership tests | Passed | 21 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
+| Local control and ownership tests | Passed | 22 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
 | Container stack | Passed | Image built; UID 1000; profile/state 0700; sandboxed browser startup; noVNC visually connected |
 | A: real Amazon login persistence | Pending human handoff | Sign-in page loads; subsequent orders verification encountered an Amazon access notice; restart acceptance not yet established |
 | Shipment discovery | Not started | Distinct shipments stable across repeated polls and restarts |
@@ -36,6 +36,12 @@ orders-page check displayed Amazon's notice about unauthorized automated access 
 a Continue button. This must be handled by you in the interactive browser. It is now
 classified as `challenge`, with the reason `amazon_access_notice_requires_review`.
 The classifier regression was reproduced with a synthetic page before the fix.
+
+The human handoff also now remembers the verification tab: reopening login focuses
+that tab without navigating away or clearing unfinished input. A regression test
+first demonstrated the wrong-tab behavior, then verified the fix and recovery when
+you close the challenge tab. These updates are in source; the live container has
+been left on its earlier image to preserve the pending interactive session.
 
 No anti-detection modifications or automated challenge completion were introduced.
 The real login-persistence gate remains pending; MQTT and delivery parsing remain gated.

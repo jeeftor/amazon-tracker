@@ -30,6 +30,8 @@ An unfamiliar page produces `unknown`; it never guesses authentication from a
 successful HTTP response. The selectors need validation against your account.
 
 Your interactive browser lease lasts 15 minutes. Reopening it renews that lease.
+If verification finds a login or challenge page, **Open Amazon / Login** returns
+you to that page and preserves any unfinished input.
 End your interactive session before requesting a browser restart. Restarting the
 container preserves the named volume, profile, and session history. Your current
 authentication state becomes `unknown` until you verify it again.

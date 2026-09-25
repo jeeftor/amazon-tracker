@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from playwright.async_api import Route
@@ -97,3 +98,34 @@ async def test_cookie_persists_across_browser_restart(manager: BrowserManager) -
         cookie["name"] == "synthetic_session" and cookie["value"] == "test-only"
         for cookie in cookies
     )
+
+
+async def test_open_login_returns_to_pending_challenge(manager: BrowserManager) -> None:
+    """Reopening human control preserves and focuses your unfinished challenge."""
+    assert manager.context is not None
+
+    async def challenge(route: Route) -> None:
+        """Serve a synthetic verification form without contacting Amazon."""
+        await route.fulfill(content_type="text/html", body='<input id="auth-mfa-otpcode">')
+
+    await manager.open_login()
+    admin = manager.pages["admin"]
+    await manager.context.route("**/your-orders/**", challenge)
+    assert (await manager.verify()).state == "challenge"
+    verification = manager.pages["verification"]
+    await verification.locator("#auth-mfa-otpcode").fill("synthetic-unfinished-input")
+    with (
+        patch.object(admin, "bring_to_front", new_callable=AsyncMock) as admin_focus,
+        patch.object(verification, "bring_to_front", new_callable=AsyncMock) as challenge_focus,
+    ):
+        await manager.open_login()
+        challenge_focus.assert_awaited_once()
+        admin_focus.assert_not_awaited()
+    assert await verification.locator("#auth-mfa-otpcode").input_value() == (
+        "synthetic-unfinished-input"
+    )
+
+    await verification.close()
+    await manager.open_login()
+    assert manager.pages["admin"] is admin
+    assert manager.mode == "interactive"
