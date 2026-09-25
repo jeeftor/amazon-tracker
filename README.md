@@ -16,11 +16,16 @@ See the [acceptance record](docs/acceptance.md) for actual local and live eviden
 
 ```sh
 cp .env.example .env
-docker compose up --build -d
+make up
 ```
 
 Open <http://127.0.0.1:8080>. Both the panel and noVNC bind to your computer's loopback
 interface. If those ports are occupied, change `PANEL_PORT` and `NOVNC_PORT` in `.env`.
+
+The footer shows your application version and a short commit SHA. A **dirty** suffix
+means the image was built with uncommitted source changes. Hover over the SHA for its
+full value. `make build` and `make up` capture this metadata; a direct unstamped Docker
+build shows “commit unknown” and “source state unknown” instead of claiming to be clean.
 
 1. Select **Open Amazon / Login**. Sign into Amazon inside the embedded browser.
 2. Complete any Amazon verification yourself, then select **Verify login**.

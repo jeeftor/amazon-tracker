@@ -17,12 +17,13 @@ evidence separately from the plan's proposed behavior.
 - Schema 3 with package-scoped delivered labels and separate check/confirmation timestamps.
 - Viewer Origin/Host validation and framing restrictions; disposable container regression.
 - GitHub test/Docker workflows, Node 24 action pins, and Dependabot configuration.
+- Version/SHA/dirty build metadata in the footer and status API; stamped local/CI builds.
 
 ## Gates
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local control, ownership, discovery tests | Passed | 40 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
+| Local control, ownership, discovery tests | Passed | 41 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium; failed migration rolls back all DDL |
 | Container stack | Passed | Image built; UID 1000; profile/state 0700; sandboxed browser startup; noVNC visually connected |
 | A: real Amazon login persistence | Passed | After manual login, the whole container was recreated with the same volume; the protected orders page verified authenticated without another login at 2026-09-25T20:41:31Z |
 | Shipment discovery | Passed for observed link shapes | Two complete recent-order scans, including one after whole-container replacement, returned the same shipment IDs and split-order groups with no unsupported links |

@@ -1,10 +1,11 @@
 .DEFAULT_GOAL := help
-.PHONY: help setup check test up down logs
+.PHONY: help setup check test build up down logs
 
 help:
 	@echo "setup  Install development dependencies with uv"
 	@echo "check  Check formatting, lint, types, and tests"
 	@echo "test   Run unit and browser integration tests"
+	@echo "build  Build your image with commit and dirty-state metadata"
 	@echo "up     Build and start the local login panel"
 	@echo "down   Stop containers, preserving your browser profile"
 	@echo "logs   Follow service logs"
@@ -21,8 +22,11 @@ check:
 test:
 	uv run pytest
 
-up:
-	docker compose up --build -d
+build:
+	sh scripts/build-image.sh
+
+up: build
+	docker compose up --no-build -d
 
 down:
 	docker compose down

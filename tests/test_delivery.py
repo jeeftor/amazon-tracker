@@ -4,6 +4,8 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from amazon_tracker.delivery import DeliveryStatus, parse_delivery_status
 from amazon_tracker.discovery import DiscoveryResult
 from amazon_tracker.storage import Store
@@ -87,3 +89,21 @@ def test_version_two_migration_preserves_ids_and_private_urls(tmp_path: Path) ->
         == "private-url"
     )
     store.close()
+
+
+def test_failed_migration_does_not_leave_partially_added_columns(tmp_path: Path) -> None:
+    """A later migration error must roll back earlier ALTER statements too."""
+    state = tmp_path / "state"
+    state.mkdir()
+    path = state / "tracker.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE shipments (shipment_id TEXT PRIMARY KEY, delivery_date_label TEXT)"
+        )
+        connection.execute("PRAGMA user_version=2")
+    with pytest.raises(sqlite3.OperationalError, match="duplicate column"):
+        Store(tmp_path)
+    with sqlite3.connect(path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(shipments)")}
+        assert "delivery_status" not in columns
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2

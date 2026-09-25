@@ -1,6 +1,7 @@
 """Exercise a disposable container without your Amazon account or persistent volume."""
 
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -86,6 +87,11 @@ def main() -> None:
         )
         code, _, body = request(panel, "/api/v1/status")
         assert code == 200 and json.loads(body)["session"]["state"] == "unknown"
+        build = json.loads(body)["build"]
+        assert build["version"]
+        if expected_sha := os.environ.get("GITHUB_SHA"):
+            assert build["sha"] == expected_sha
+            assert build["dirty"] is False
         assert request(panel, "/", Host="attacker.invalid")[0] == 400
         code, headers, _ = request(viewer, "/vnc.html", Host="127.0.0.1:6080")
         assert code == 200

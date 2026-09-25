@@ -27,6 +27,8 @@ class Store:
             self.connection.close()
             raise RuntimeError("Database schema is newer than this application")
         with self.connection:
+            # SQLite DDL needs an explicit transaction for an all-or-nothing migration.
+            self.connection.execute("BEGIN IMMEDIATE")
             self.connection.execute(
                 "CREATE TABLE IF NOT EXISTS session_history "
                 "(id INTEGER PRIMARY KEY, state TEXT NOT NULL, "

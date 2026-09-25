@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from amazon_tracker.browser import BrowserBusy, BrowserManager, BrowserUnavailable, SessionRequired
+from amazon_tracker.build_info import build_info
 from amazon_tracker.config import Settings
 from amazon_tracker.session import SessionResult
 from amazon_tracker.storage import Store
@@ -33,6 +34,7 @@ class Runtime:
         self.operation: dict[str, str | None] = {"action": None, "state": "idle", "error": None}
         self.task: asyncio.Task[None] | None = None
         self.discovery_revalidated = False
+        self.build = build_info()
 
     def submit(self, action: str) -> None:
         """Coalesce identical requests and reject conflicting browser work."""
@@ -103,6 +105,7 @@ class Runtime:
         if not self.browser.running and self.session.state == "authenticated":
             self.session = SessionResult("unknown", "browser_disconnected")
         return {
+            "build": self.build,
             "service": {"state": "online" if self.browser.running else "degraded"},
             "session": {
                 "state": self.session.state,

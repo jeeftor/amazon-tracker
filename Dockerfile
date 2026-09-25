@@ -34,6 +34,10 @@ RUN dpkg-query -W -f='{"version":"${Version}"}' novnc > /usr/share/novnc/package
 COPY docker/fluxbox-init /etc/fluxbox/tracker-init
 COPY docker/novnc_proxy.py /app/docker/novnc_proxy.py
 COPY docker/supervisord.conf /etc/supervisor/conf.d/tracker.conf
+ARG BUILD_SHA=unknown
+ARG BUILD_DIRTY=unknown
+ENV TRACKER_BUILD_SHA=${BUILD_SHA} TRACKER_BUILD_DIRTY=${BUILD_DIRTY}
+LABEL org.opencontainers.image.revision=${BUILD_SHA}
 USER tracker
 ENV PATH=/opt/tracker-venv/bin:$PATH
 EXPOSE 8080 6080

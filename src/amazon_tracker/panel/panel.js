@@ -18,6 +18,12 @@ async function refresh() {
     const response = await fetch("/api/v1/status");
     if (!response.ok) throw new Error("Your tracker is unavailable.");
     const state = await response.json();
+    const build = state.build;
+    byId("build").textContent = build
+      ? `v${build.version} · ${build.sha ? build.sha.slice(0, 12) : "commit unknown"}`
+        + (build.dirty === true ? " · dirty" : build.dirty === null ? " · source state unknown" : "")
+      : "Version unavailable";
+    byId("build").title = build?.sha || "This build has no Git stamp.";
     byId("session").textContent = label(state.session.state);
     byId("verified").textContent = state.session.last_verified_at
       ? new Date(state.session.last_verified_at).toLocaleString() : "Never";

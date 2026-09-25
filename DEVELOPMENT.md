@@ -93,6 +93,8 @@ Do not rotate or regenerate it when shipment records exist. Schema version 2 add
 shipments and discovery history to the version 1 session database.
 Schema version 3 adds delivered state/date labels, last confirmed observation, and
 last status-check timestamps without changing identities or private URLs.
+Migrations use an explicit SQLite transaction so a failed ALTER cannot leave the
+database with only some of the new columns.
 
 Tracking URLs remain private in SQLite. REST exposes IDs, grouping IDs, recognized
 delivered status/date labels, null stops, observation time, and staleness. Loaded records start
@@ -136,13 +138,13 @@ primary design. Research DOM updates and the transport used by the real tracking
 ## Container builds and certificates
 
 ```sh
-docker compose build
+make build
 docker compose up -d
 docker compose logs --tail=100 tracker
 ```
 
 When a corporate CA is required, build a private certificate-enabled base locally and
-use `docker compose build --build-arg BASE_IMAGE=your-local-base:tag`. The application
+use `sh scripts/build-image.sh --build-arg BASE_IMAGE=your-local-base:tag`. The application
 Dockerfile uses public image names. Certificates in `/usr/local/share/ca-certificates`
 are imported into Chromium's container-local trust store during the build. Keep
 organization-specific hosts, bootstrap files, and certificates out of public source.
@@ -151,6 +153,20 @@ Use scoped CA settings for dependency/browser downloads; do not change global TL
 The container runs as UID 1000. Supervisor manages Xvfb, Fluxbox, VNC, noVNC, and the
 application; Chromium belongs to the application. `init: true` reaps processes.
 The health check queries `/health`, not Amazon or a notification service.
+
+## Build identity
+
+The footer and `GET /api/v1/status` report the installed Python package version, full
+build SHA (shortened in the footer), and a nullable dirty flag. `make build`/`make up`
+run `scripts/build-image.sh`, capturing Git HEAD and tracked/untracked changes at the
+start of the build. Ignored local data does not mark the source dirty. Committing
+later does not change an existing image's stamp; rebuild it to show the new clean SHA.
+
+GitHub passes the checked-out `github.sha` and `BUILD_DIRTY=false` into test and publish
+builds. The container smoke test checks that REST reports that same SHA and clean state.
+The Dockerfile stores `BUILD_SHA` and `BUILD_DIRTY` as `TRACKER_BUILD_SHA` and
+`TRACKER_BUILD_DIRTY`. Unstamped builds and ordinary local `uvicorn` runs show unknown
+source metadata. This identifies code provenance; it is not a cryptographic attestation.
 
 ## Documentation and delivery
 
