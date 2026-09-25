@@ -1,5 +1,6 @@
 """Conservative US English session checks; selectors await real-account validation."""
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlsplit
@@ -22,6 +23,9 @@ async def inspect_session(page: Page) -> SessionResult:
     url = urlsplit(page.url)
     if url.hostname not in {"amazon.com", "www.amazon.com"}:
         return SessionResult("unknown", "unexpected_page")
+    access_notice = page.get_by_text(re.compile("unauthorized AI agent", re.IGNORECASE)).first
+    if await access_notice.is_visible():
+        return SessionResult("challenge", "amazon_access_notice_requires_review")
     challenge = page.locator(
         '#captchacharacters, #auth-mfa-otpcode, input[name="cvf_captcha_input"], '
         'form[action*="validateCaptcha"], #cvf-page-content'

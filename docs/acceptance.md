@@ -17,9 +17,9 @@ evidence separately from the plan's proposed behavior.
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local control and ownership tests | Passed | 20 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
+| Local control and ownership tests | Passed | 21 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
 | Container stack | Passed | Image built; UID 1000; profile/state 0700; sandboxed browser startup; noVNC visually connected |
-| A: real Amazon login persistence | Pending user login | Login, whole-container restart, verify without reauthentication |
+| A: real Amazon login persistence | Pending human handoff | Sign-in page loads; subsequent orders verification encountered an Amazon access notice; restart acceptance not yet established |
 | Shipment discovery | Not started | Distinct shipments stable across repeated polls and restarts |
 | B/C: real stop source and transitions | Not started | A real live delivery page; several observed changes without private endpoint replay |
 | Parser fixtures and event engine | Gated | Sanitized real observations before committing Amazon parser behavior |
@@ -27,6 +27,18 @@ evidence separately from the plan's proposed behavior.
 
 Synthetic persistent-cookie tests do not establish Amazon session persistence.
 No claims about real stop counts, deliveries, or Home Assistant acceptance are made.
+
+## Live observation: access notice
+
+On September 25, 2026 the local Chromium browser successfully loaded Amazon's sign-in
+page with TLS verification and Chromium sandboxing enabled. The subsequent protected
+orders-page check displayed Amazon's notice about unauthorized automated access and
+a Continue button. This must be handled by you in the interactive browser. It is now
+classified as `challenge`, with the reason `amazon_access_notice_requires_review`.
+The classifier regression was reproduced with a synthetic page before the fix.
+
+No anti-detection modifications or automated challenge completion were introduced.
+The real login-persistence gate remains pending; MQTT and delivery parsing remain gated.
 
 ## Decisions to carry forward
 

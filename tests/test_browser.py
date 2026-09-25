@@ -40,6 +40,11 @@ async def manager(tmp_path: Path) -> AsyncIterator[BrowserManager]:
         ("/ap/signin", '<input id="auth-mfa-otpcode">', "challenge"),
         ("/your-orders/orders", '<input id="captchacharacters">', "challenge"),
         ("/ap/cvf", "<h1>Verification required</h1>", "challenge"),
+        (
+            "/your-orders/orders",
+            "<p>Continued access by an unauthorized AI agent</p><button>Continue</button>",
+            "challenge",
+        ),
         ("/your-orders/orders", "<h1>Something went wrong</h1>", "unknown"),
     ],
 )
