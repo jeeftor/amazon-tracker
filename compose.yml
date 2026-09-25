@@ -1,0 +1,24 @@
+services:
+  tracker:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-python:3.12-slim-bookworm}
+    init: true
+    restart: unless-stopped
+    shm_size: 1gb
+    security_opt:
+      - seccomp=./docker/chromium-seccomp.json
+    stop_grace_period: 45s
+    ports:
+      - "127.0.0.1:${PANEL_PORT:-8080}:8080"
+      - "127.0.0.1:${NOVNC_PORT:-6080}:6080"
+    environment:
+      DATA_DIR: /data
+      NOVNC_PORT: ${NOVNC_PORT:-6080}
+      INTERACTIVE_TIMEOUT_SECONDS: ${INTERACTIVE_TIMEOUT_SECONDS:-900}
+      CHROMIUM_SANDBOX: ${CHROMIUM_SANDBOX:-true}
+    volumes:
+      - tracker-data:/data
+volumes:
+  tracker-data:
