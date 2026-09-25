@@ -31,9 +31,11 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0, Node 24
         with:
-          version: '0.8.9'
+          version: '0.12.19'
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
+      - name: Require a stable Python interpreter
+        run: uv run python -c "import sys; print(sys.version); assert sys.version_info.releaselevel == 'final'"
       - run: uv run playwright install --with-deps chromium --only-shell
       - name: Permit the fixture browser's sandbox on this runner
         run: |

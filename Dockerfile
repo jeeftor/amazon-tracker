@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl supervisor xvfb fluxbox x11vnc novnc websockify x11-utils \
     && rm -rf /var/lib/apt/lists/*
-RUN python -m pip install --no-cache-dir uv==0.8.9
+RUN python -m pip install --no-cache-dir uv==0.12.19
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project \

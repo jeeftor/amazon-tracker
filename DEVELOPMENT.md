@@ -161,6 +161,9 @@ Every JavaScript action is pinned to a full commit whose `action.yml` declares N
 Upgrading `setup-node` does not change another action's bundled runtime; inspect the
 action metadata when updating pins. Dependabot checks Actions, Docker, and uv weekly
 after its configuration reaches the default branch. `actionlint` validates workflow syntax.
+Keep the `uv` executable pins in the workflow and Dockerfile in sync. Older `uv`
+releases can resolve a prerelease interpreter from their bundled download catalog;
+verify the actual Python version reported by pytest when adding a matrix entry.
 
 After all checks pass, pushes to `master` publish `ghcr.io/jeeftor/amazon-tracker:edge`;
 `v*` tags publish the matching semantic version. Both publish a full commit SHA tag,
