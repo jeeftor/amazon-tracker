@@ -1,4 +1,4 @@
-"""Conservative US English session checks; selectors await real-account validation."""
+"""Conservative US English session checks for Amazon's protected orders page."""
 
 import re
 from dataclasses import dataclass
@@ -38,4 +38,14 @@ async def inspect_session(page: Page) -> SessionResult:
     signed_in = page.locator('a[href*="/gp/flex/sign-out.html"], #nav-item-signout')
     if "orders" in url.path.lower() and await orders.count() and await signed_in.count():
         return SessionResult("authenticated", "orders_and_signout_present")
+    orders_paths = {
+        "/your-orders/orders",
+        "/gp/css/order-history",
+        "/gp/your-account/order-history",
+    }
+    if url.path.rstrip("/") in orders_paths:
+        heading = page.get_by_role("heading", name="Your Orders", exact=True).first
+        search = page.get_by_role("button", name="Search Orders", exact=True).first
+        if await heading.is_visible() and await search.is_visible():
+            return SessionResult("authenticated", "protected_orders_controls_present")
     return SessionResult("unknown", "authenticated_page_not_confirmed")

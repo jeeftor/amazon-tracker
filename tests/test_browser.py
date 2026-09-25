@@ -37,6 +37,17 @@ async def manager(tmp_path: Path) -> AsyncIterator[BrowserManager]:
         ),
         ("/your-orders/orders", '<div id="yourOrders"></div>', "unknown"),
         ("/your-orders/orders", '<a id="nav-item-signout">Sign out</a>', "unknown"),
+        (
+            "/your-orders/orders",
+            "<h1>Your Orders</h1><form><button>Search Orders</button></form>",
+            "authenticated",
+        ),
+        ("/your-orders/orders", "<h1>Your Orders</h1>", "unknown"),
+        (
+            "/your-orders/orders",
+            "<h1 hidden>Your Orders</h1><button hidden>Search Orders</button>",
+            "unknown",
+        ),
         ("/ap/signin", '<input id="ap_email">', "needs_login"),
         ("/ap/signin", '<input id="auth-mfa-otpcode">', "challenge"),
         ("/your-orders/orders", '<input id="captchacharacters">', "challenge"),
