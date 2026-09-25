@@ -16,8 +16,10 @@ services:
     environment:
       DATA_DIR: /data
       NOVNC_PORT: ${NOVNC_PORT:-6080}
+      PANEL_PORT: ${PANEL_PORT:-8080}
       INTERACTIVE_TIMEOUT_SECONDS: ${INTERACTIVE_TIMEOUT_SECONDS:-900}
       CHROMIUM_SANDBOX: ${CHROMIUM_SANDBOX:-true}
+      DISCOVERY_MAX_PAGES: ${DISCOVERY_MAX_PAGES:-5}
     volumes:
       - tracker-data:/data
 volumes:

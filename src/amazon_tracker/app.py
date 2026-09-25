@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from amazon_tracker.browser import BrowserBusy, BrowserManager, BrowserUnavailable
+from amazon_tracker.browser import BrowserBusy, BrowserManager, BrowserUnavailable, SessionRequired
 from amazon_tracker.config import Settings
 from amazon_tracker.session import SessionResult
 from amazon_tracker.storage import Store
@@ -32,18 +32,33 @@ class Runtime:
         self.last_verified_at = self.store.last_verified_at()
         self.operation: dict[str, str | None] = {"action": None, "state": "idle", "error": None}
         self.task: asyncio.Task[None] | None = None
+        self.discovery_revalidated = False
 
     def submit(self, action: str) -> None:
         """Coalesce identical requests and reject conflicting browser work."""
         if self.task and not self.task.done():
             if self.operation["action"] == action:
                 return
+            if self.operation["action"] == "refresh" and action == "open-login":
+                previous = self.task
+                previous.cancel()
+                self.operation = {"action": action, "state": "running", "error": None}
+                self.task = asyncio.create_task(self._takeover(previous))
+                return
             raise BrowserBusy("another_operation_running")
         self.browser.expire_interactive()
         if action == "restart" and self.browser.mode == "interactive":
             raise BrowserBusy("end_interactive_before_restart")
+        if action == "refresh" and self.browser.mode == "interactive":
+            raise BrowserBusy("end_interactive_before_refresh")
         self.operation = {"action": action, "state": "running", "error": None}
         self.task = asyncio.create_task(self._run(action))
+
+    async def _takeover(self, previous: asyncio.Task[None]) -> None:
+        """Cancel discovery before handing browser ownership to your login action."""
+        with suppress(asyncio.CancelledError):
+            await previous
+        await self._run("open-login")
 
     async def _run(self, action: str) -> None:
         """Persist verification before reporting success; never expose raw exceptions."""
@@ -61,10 +76,23 @@ class Runtime:
                 await self.browser.end_interactive()
             elif action == "restart":
                 self.session = SessionResult("unknown", "browser_restarted_verify_required")
+                self.discovery_revalidated = False
                 await self.browser.restart()
+            elif action == "refresh":
+                result_discovery = await self.browser.discover()
+                observed_at = datetime.now(UTC).isoformat()
+                self.store.save_discovery(result_discovery, observed_at)
+                self.session = SessionResult("authenticated", "orders_discovery_verified")
+                self.store.record(self.session.state, self.session.reason, observed_at)
+                self.last_verified_at = observed_at
+                self.discovery_revalidated = True
             self.operation["state"] = "complete"
-        except BrowserBusy:
-            self.operation.update(state="failed", error="browser_busy")
+        except SessionRequired as exc:
+            self.session = exc.result
+            self.discovery_revalidated = False
+            self.operation.update(state="failed", error="amazon_session_requires_attention")
+        except BrowserBusy as exc:
+            self.operation.update(state="failed", error=str(exc))
         except Exception:
             self.session = SessionResult("unknown", "operation_failed")
             self.operation.update(state="failed", error="operation_failed_check_browser")
@@ -91,7 +119,11 @@ class Runtime:
                 "error": self.browser.error,
             },
             "operation": self.operation,
-            "tracker": {"state": "pending_live_acceptance"},
+            "tracker": {
+                "state": "discovery_only",
+                "last_discovery": self.store.last_discovery(),
+                "discovered_shipments": len(self.store.shipments()),
+            },
             "mqtt": {"state": "not_implemented"},
         }
 
@@ -175,6 +207,21 @@ def create_app(settings: Settings | None = None, *, start_browser: bool = True) 
         """Return the Amazon session domain only."""
         runtime: Runtime = request.app.state.runtime
         return dict(runtime.status()["session"])
+
+    @app.get("/api/v1/shipments")
+    async def shipments(request: Request) -> list[dict[str, Any]]:
+        """List discovered packages without leaking order numbers or signed links."""
+        runtime: Runtime = request.app.state.runtime
+        return runtime.store.shipments(
+            revalidated=runtime.discovery_revalidated
+            and runtime.browser.running
+            and runtime.session.state == "authenticated"
+        )
+
+    @app.post("/api/v1/refresh", status_code=202)
+    async def refresh(request: Request) -> JSONResponse:
+        """Queue one bounded scan; repeated requests share the in-flight operation."""
+        return enqueue(request, "refresh")
 
     @app.post("/api/v1/session/{action}", status_code=202)
     async def session_action(action: str, request: Request) -> JSONResponse:

@@ -140,3 +140,43 @@ async def test_open_login_returns_to_pending_challenge(manager: BrowserManager) 
     await manager.open_login()
     assert manager.pages["admin"] is admin
     assert manager.mode == "interactive"
+
+
+async def test_discovery_follows_pagination_and_preserves_split_shipments(
+    manager: BrowserManager,
+) -> None:
+    """Scan visible tracking links across orders pages without copying product text."""
+    assert manager.context is not None
+
+    async def orders(route: Route) -> None:
+        """Serve two orders pages for a single split order."""
+        second = "startIndex=10" in route.request.url
+        package = 1 if second else 0
+        next_link = "" if second else '<a href="/your-orders/orders?startIndex=10">Next →</a>'
+        await route.fulfill(
+            content_type="text/html",
+            body=(
+                "<h1>Your Orders</h1><button>Search Orders</button>"
+                '<a href="/gp/your-account/ship-track?orderId=synthetic'
+                f'&amp;packageIndex={package}">'
+                f"Track package</a>{next_link}"
+                '<a hidden href="/private">Track package</a><p>Private product text</p>'
+            ),
+        )
+
+    await manager.context.route("**/your-orders/**", orders)
+    with patch.object(manager, "_pace_discovery", new_callable=AsyncMock) as pacing:
+        result = await manager.discover()
+        assert pacing.await_count == 2
+    assert result.pages_scanned == 2
+    assert result.complete
+    assert len(result.links) == 2
+    assert "packageIndex=0" in result.links[0]
+    assert "packageIndex=1" in result.links[1]
+    assert "Private product" not in str(result)
+
+    manager.settings.discovery_max_pages = 1
+    with patch.object(manager, "_pace_discovery", new_callable=AsyncMock):
+        partial = await manager.discover()
+    assert not partial.complete
+    assert partial.pages_scanned == 1

@@ -19,3 +19,4 @@ class Settings(BaseSettings):
     interactive_timeout_seconds: int = Field(default=900, ge=30, le=7200)
     novnc_port: int = Field(default=6080, ge=1024, le=65535)
     panel_port: int = Field(default=8080, ge=1024, le=65535)
+    discovery_max_pages: int = Field(default=5, ge=1, le=10)

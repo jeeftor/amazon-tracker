@@ -173,6 +173,29 @@ def test_schema_and_private_permissions(tmp_path: Path) -> None:
     """Persist history in WAL mode and private directories."""
     store = Store(tmp_path)
     assert store.connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-    assert store.connection.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert store.connection.execute("PRAGMA user_version").fetchone()[0] == 2
     assert (tmp_path / "state").stat().st_mode & 0o777 == 0o700
     store.close()
+
+
+async def test_login_preempts_discovery_without_partial_results(tmp_path: Path) -> None:
+    """A paced discovery scan must yield to the human login action."""
+    runtime = Runtime(Settings(data_dir=tmp_path))
+    started = asyncio.Event()
+
+    async def discover() -> None:
+        """Wait like a paced navigation until the task is cancelled."""
+        started.set()
+        await asyncio.Event().wait()
+
+    runtime.browser.discover = AsyncMock(side_effect=discover)
+    runtime.browser.open_login = AsyncMock()
+    runtime.submit("refresh")
+    await started.wait()
+    runtime.submit("open-login")
+    assert runtime.task is not None
+    await runtime.task
+    runtime.browser.open_login.assert_awaited_once()
+    assert runtime.operation["state"] == "complete"
+    assert runtime.store.last_discovery() is None
+    await runtime.close()

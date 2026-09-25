@@ -3,6 +3,7 @@
 import asyncio
 import fcntl
 import time
+from collections import deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import IO, Literal
 from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
 
 from amazon_tracker.config import ORDERS_URL, Settings
+from amazon_tracker.discovery import DiscoveryResult, next_orders_page, tracking_links
 from amazon_tracker.session import SessionResult, inspect_session
 
 
@@ -20,6 +22,15 @@ class BrowserBusy(Exception):
 
 class BrowserUnavailable(Exception):
     """Your browser could not start or disconnected."""
+
+
+class SessionRequired(Exception):
+    """Discovery stopped because your Amazon session requires attention."""
+
+    def __init__(self, result: SessionResult) -> None:
+        """Carry only sanitized session state to the control plane."""
+        self.result = result
+        super().__init__(result.reason)
 
 
 class BrowserManager:
@@ -37,6 +48,8 @@ class BrowserManager:
         self.error: str | None = None
         self.pages: dict[str, Page] = {}
         self.interactive_page: Page | None = None
+        self.discovery_starts: deque[float] = deque()
+        self.last_discovery_navigation: float = 0
 
     @property
     def running(self) -> bool:
@@ -174,6 +187,46 @@ class BrowserManager:
         async with self.ownership(interactive_allowed=True):
             self.mode = "idle"
             self.interactive_until = 0
+
+    async def discover(self) -> DiscoveryResult:
+        """Scan bounded orders pages with pacing, session checks, and exclusive ownership."""
+        async with self.ownership():
+            await self.start()
+            page = await self.page("orders")
+            url: str | None = ORDERS_URL
+            visited: set[str] = set()
+            links: list[str] = []
+            for _ in range(self.settings.discovery_max_pages):
+                if url is None or url in visited:
+                    break
+                await self._pace_discovery()
+                visited.add(url)
+                await page.goto(url, wait_until="domcontentloaded")
+                session = await inspect_session(page)
+                if session.state != "authenticated":
+                    self.mode = "interactive"
+                    self.interactive_page = page
+                    self.interactive_until = (
+                        time.monotonic() + self.settings.interactive_timeout_seconds
+                    )
+                    await page.bring_to_front()
+                    raise SessionRequired(session)
+                links.extend(await tracking_links(page))
+                url = await next_orders_page(page)
+            return DiscoveryResult(list(dict.fromkeys(links)), len(visited), url is None)
+
+    async def _pace_discovery(self) -> None:
+        """Space full orders navigations by at least thirty seconds."""
+        delay = self.last_discovery_navigation + 30 - time.monotonic()
+        if delay > 0:
+            await asyncio.sleep(delay)
+        now = time.monotonic()
+        while self.discovery_starts and self.discovery_starts[0] <= now - 3600:
+            self.discovery_starts.popleft()
+        if len(self.discovery_starts) >= 12:
+            raise BrowserBusy("discovery_hourly_budget_reached")
+        self.discovery_starts.append(now)
+        self.last_discovery_navigation = now
 
     async def restart(self) -> None:
         """Restart only when human ownership has been released."""

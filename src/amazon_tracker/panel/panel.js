@@ -3,6 +3,7 @@ const byId = (id) => document.getElementById(id);
 const label = (value) => (value || "—").replaceAll("_", " ");
 let requestPending = false;
 let operationRunning = false;
+let currentAction = null;
 
 function showBrowser() {
   const viewer = byId("viewer");
@@ -28,6 +29,25 @@ async function refresh() {
       ? `${state.browser.interactive_seconds_remaining} seconds` : "—";
     byId("browser-error").textContent = state.browser.error ? label(state.browser.error) : "";
     operationRunning = state.operation.state === "running";
+    currentAction = state.operation.action;
+    byId("package-count").textContent = `${state.tracker.discovered_shipments} discovered`;
+    const discovery = state.tracker.last_discovery;
+    if (discovery) {
+      byId("discovery-detail").textContent = `Last checked ${new Date(discovery.observed_at).toLocaleString()}. `
+        + `${discovery.pages_scanned} order pages checked. `
+        + (discovery.complete ? "Reached the end of recent orders. " : "Scan is partial; more orders may exist. ")
+        + (discovery.unsupported_links ? `${discovery.unsupported_links} links need parser support.` : "");
+    }
+    const packagesResponse = await fetch("/api/v1/shipments");
+    if (packagesResponse.ok) {
+      const packages = await packagesResponse.json();
+      byId("packages").replaceChildren(...packages.map((shipment) => {
+        const item = document.createElement("li");
+        item.textContent = `${shipment.shipment_id} — delivery status not checked`
+          + (shipment.is_stale ? " (discovery needs refresh)" : "");
+        return item;
+      }));
+    }
     if (!requestPending) {
       byId("message").textContent = state.operation.error ? label(state.operation.error)
         : operationRunning ? "Your browser is working…"
@@ -39,7 +59,8 @@ async function refresh() {
     byId("message").textContent = error.message;
   } finally {
     document.querySelectorAll("button[data-action], #restart").forEach((button) => {
-      button.disabled = requestPending || operationRunning;
+      button.disabled = requestPending || (operationRunning
+        && !(currentAction === "refresh" && button.dataset.action === "open-login"));
     });
   }
 }
@@ -48,7 +69,8 @@ async function act(action) {
   requestPending = true;
   const restart = action === "restart";
   try {
-    const response = await fetch(`/api/v1/${restart ? "browser/restart" : `session/${action}`}`, {
+    const path = restart ? "browser/restart" : action === "refresh" ? "refresh" : `session/${action}`;
+    const response = await fetch(`/api/v1/${path}`, {
       method: "POST",
       headers: {"X-Tracker-Request": "1", ...(restart ? {"X-Confirm-Restart": "yes"} : {})},
     });

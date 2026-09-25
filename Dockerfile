@@ -32,6 +32,7 @@ RUN mkdir -p /home/tracker/.local/share/pki/nssdb \
     && chown -R tracker:tracker /home/tracker/.local
 RUN dpkg-query -W -f='{"version":"${Version}"}' novnc > /usr/share/novnc/package.json
 COPY docker/fluxbox-init /etc/fluxbox/tracker-init
+COPY docker/novnc_proxy.py /app/docker/novnc_proxy.py
 COPY docker/supervisord.conf /etc/supervisor/conf.d/tracker.conf
 USER tracker
 ENV PATH=/opt/tracker-venv/bin:$PATH

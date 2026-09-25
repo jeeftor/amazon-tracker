@@ -12,18 +12,24 @@ evidence separately from the plan's proposed behavior.
 - SQLite WAL session history and initial schema migration.
 - Non-root supervised Xvfb, window manager, VNC, noVNC, application, and Chromium.
 - Loopback port bindings, private profile permissions, sanitized diagnostics.
+- Bounded, paced recent-order pagination and separate identities for split shipments.
+- Schema 2 with persistent HMAC identities, private links, and public freshness metadata.
+- Viewer Origin/Host validation and framing restrictions; disposable container regression.
+- GitHub test/Docker workflows, Node 24 action pins, and Dependabot configuration.
 
 ## Gates
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local control and ownership tests | Passed | 25 tests for the login milestone; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
+| Local control, ownership, discovery tests | Passed | 36 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium |
 | Container stack | Passed | Image built; UID 1000; profile/state 0700; sandboxed browser startup; noVNC visually connected |
 | A: real Amazon login persistence | Passed | After manual login, the whole container was recreated with the same volume; the protected orders page verified authenticated without another login at 2026-09-25T20:41:31Z |
-| Shipment discovery | Not started | Distinct shipments stable across repeated polls and restarts |
+| Shipment discovery | Passed for observed link shapes | Two complete recent-order scans, including one after whole-container replacement, returned the same shipment IDs and split-order groups with no unsupported links |
 | B/C: real stop source and transitions | Not started | A real live delivery page; several observed changes without private endpoint replay |
 | Parser fixtures and event engine | Gated | Sanitized real observations before committing Amazon parser behavior |
-| MQTT and Home Assistant | Gated | Proven live source, deterministic event tests, broker/HA restart checks |
+| MQTT, Telegram, Home Assistant | Gated | Proven live source, deterministic event tests, broker/HA restart checks, Telegram setup and delivery |
+| Security review | Completed for current scope | Two viewer issues fixed; local disposable-container regression passed; Python dependency audit reported no known vulnerabilities; remote deployment remains blocked on authentication |
+| GitHub workflows | Locally validated; hosted run pending | actionlint 1.7.12 passed; each pinned JavaScript action declares Node 24; native amd64/arm64 builds and conditional GHCR publication configured |
 
 Synthetic persistent-cookie tests do not establish Amazon session persistence.
 No claims about real stop counts, deliveries, or Home Assistant acceptance are made.
@@ -48,6 +54,21 @@ Orders controls without the old account marker. A synthetic regression reproduce
 the false unknown state; the corrected verifier then confirmed the real protected
 page after whole-container recreation. Gate A is passed. Live stop parsing and
 notification outputs still require their separate acceptance gates.
+
+## Discovery and security milestone
+
+The first live orders scan completed three pages and recognized every visible tracking
+link. It included distinct shipment IDs grouped under the same order ID. Only private
+installation-specific IDs and scan counts were exposed through the API. After replacing
+the whole container, saved IDs were unchanged and all records started stale pending
+revalidation. Delivery state remains unknown; no stops or delivered state were inferred.
+The repeat scan completed at 2026-09-25T21:03:05Z with the same IDs and all returned
+records revalidated, without another login.
+
+See [the security review](security-review.md) for reproduced viewer findings, fixes,
+remaining trust boundaries, and the limits of dependency auditing. The new viewer
+protections are deployed locally. [Notification decisions](notifications.md) describe
+the agreed MQTT/Telegram requirements; those transports are still unimplemented.
 
 ## Decisions to carry forward
 

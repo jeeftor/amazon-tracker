@@ -24,9 +24,13 @@
       <dt>Interactive time left</dt><dd id="lease">—</dd></dl>
       <p id="browser-error"></p><button id="restart">Restart browser…</button>
     </section>
-    <section><h2>Delivery announcements <span class="badge muted">Not connected yet</span></h2>
-      <p>Your first step is to verify that your Amazon login survives a container restart.</p>
-      <p>Live package tracking, MQTT, and Home Assistant announcements follow the real delivery checks in your reviewed plan.</p>
+    <section><h2>Your packages <span id="package-count" class="badge muted">Not checked yet</span></h2>
+      <p>Discover separate packages, including split shipments from one order. Delivery status and live stops will follow after tracking validation.</p>
+      <button data-action="refresh">Find packages</button>
+      <p id="discovery-detail">Your saved Amazon login is used to check your recent orders.</p>
+      <p>Checks are paced to reduce requests. You can select Open Amazon / Login to interrupt a check.</p>
+      <ul id="packages"></ul>
+      <p>MQTT and Home Assistant announcements are not connected yet.</p>
     </section>
   </div>
   <p id="message" role="status" aria-live="polite">Connecting to your tracker…</p>
