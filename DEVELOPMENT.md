@@ -100,8 +100,9 @@ Migrations use an explicit SQLite transaction so a failed ALTER cannot leave the
 database with only some of the new columns.
 
 Tracking URLs remain private in SQLite. REST exposes IDs, grouping IDs, recognized
-delivered status/date labels, null stops, observation time, and staleness. Loaded records start
-stale until revalidated during the current process lifetime. Absent packages are
+delivered status/date labels, null stops, observation time, and staleness. Unfinished records
+start stale until revalidated during the current process lifetime. Confirmed deliveries
+are final, with `is_stale=false` and `stale_after_seconds=null`. Absent packages are
 not deleted or marked delivered. Shipment retirement/retention awaits the delivery
 state engine; history tables are currently capped at 1,000 rows each.
 
@@ -119,9 +120,12 @@ Calendar validation rejects impossible month/day combinations; no year or delive
 time is invented. Relative wording is displayed with its observation time. The parser
 does not persist arbitrary card text, products, addresses, or tracking numbers.
 
-An unknown observation does not erase a saved delivered fact or refresh its confirmed
-timestamp. Such a saved fact is marked stale when the latest scan fails to revalidate
-it. Initial historical deliveries establish dashboard state; they are not new delivery
+The user's September 26 clarification makes confirmed delivery a final tracking state.
+Discovery upserts leave already-delivered rows unchanged, including their date labels
+and observation/check timestamps. Discovery still scans recent-order pages for unfinished
+packages and may encounter delivered cards incidentally; it does not open their individual
+tracking pages. Delivered records do not expire or require revalidation after restart.
+Initial historical deliveries establish dashboard state; they are not new delivery
 events. Return/cancellation handling and notification transitions remain separate work.
 
 ## Adding parser behavior

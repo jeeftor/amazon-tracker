@@ -93,7 +93,7 @@ class Store:
         return str(row[0]) if row else None
 
     def save_discovery(self, result: DiscoveryResult, observed_at: str) -> None:
-        """Upsert distinct shipments atomically; absence never means delivered or cancelled."""
+        """Update unfinished shipments atomically while preserving confirmed deliveries."""
         candidates = {}
         statuses: dict[str, DeliveryStatus | None] = {}
         unsupported = 0
@@ -127,7 +127,8 @@ class Store:
                     "status_observed_at=COALESCE(excluded.status_observed_at, "
                     "shipments.status_observed_at), "
                     "status_checked_at=COALESCE(excluded.status_checked_at, "
-                    "shipments.status_checked_at)",
+                    "shipments.status_checked_at) "
+                    "WHERE shipments.delivery_status != 'delivered'",
                     (
                         candidate.shipment_id,
                         candidate.order_id,
@@ -193,10 +194,11 @@ class Store:
                 "tracking_visibility": "unknown",
                 "stops_remaining": None,
                 "observed_at": row[2],
-                "stale_after_seconds": 1800,
-                "is_stale": not revalidated
-                or (row[3] == "delivered" and row[5] != row[2])
-                or (now - datetime.fromisoformat(row[2])).total_seconds() > 1800,
+                "stale_after_seconds": None if row[3] == "delivered" else 1800,
+                "is_stale": row[3] != "delivered"
+                and (
+                    not revalidated or (now - datetime.fromisoformat(row[2])).total_seconds() > 1800
+                ),
             }
             for row in rows
         ]

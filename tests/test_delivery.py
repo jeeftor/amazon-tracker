@@ -1,7 +1,7 @@
 """Verify delivered facts from shipment-scoped order cards without live map data."""
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -29,9 +29,9 @@ def test_delivered_dates_are_validated_without_inventing_a_year() -> None:
 
 
 def test_delivery_survives_restart_and_missing_labels(tmp_path: Path) -> None:
-    """Unknown observations cannot erase a known delivery or pretend to revalidate it."""
+    """A confirmed delivery stays final across restarts, aging, and incidental scans."""
     link = "https://www.amazon.com/gp/your-account/ship-track?shipmentId=synthetic"
-    observed = datetime.now(UTC).isoformat()
+    observed = (datetime.now(UTC) - timedelta(days=7)).isoformat()
     store = Store(tmp_path)
     store.save_discovery(
         DiscoveryResult([link], 1, True, {link: DeliveryStatus("delivered", "September 12")}),
@@ -42,19 +42,26 @@ def test_delivery_survives_restart_and_missing_labels(tmp_path: Path) -> None:
     assert original["delivery_date_label"] == "September 12"
     assert original["status_observed_at"] == observed
     assert not original["is_stale"]
+    assert original["stale_after_seconds"] is None
     store.close()
 
     store = Store(tmp_path)
     assert store.shipments()[0]["status"] == "delivered"
-    assert store.shipments()[0]["is_stale"]
+    assert not store.shipments()[0]["is_stale"]
     later = datetime.now(UTC).isoformat()
     store.save_discovery(DiscoveryResult([link], 1, True, {link: DeliveryStatus()}), later)
     shipment = store.shipments(revalidated=True)[0]
     assert shipment["status"] == "delivered"
     assert shipment["status_observed_at"] == observed
-    assert shipment["status_checked_at"] == later
-    assert shipment["is_stale"]
+    assert shipment["status_checked_at"] == observed
+    assert not shipment["is_stale"]
     assert shipment["stops_remaining"] is None
+    store.save_discovery(
+        DiscoveryResult([link], 1, True, {link: DeliveryStatus("delivered", "today")}), later
+    )
+    assert store.shipments()[0] == original
+    store.save_discovery(DiscoveryResult([], 1, True), later)
+    assert store.shipments()[0] == original
     store.close()
 
 

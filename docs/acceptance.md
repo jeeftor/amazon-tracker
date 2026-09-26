@@ -92,6 +92,7 @@ announcement was inferred. A private SQLite backup was kept before the migration
 ## Decisions to carry forward
 
 - Basic delivered facts can be read from orders now; live-map absence does not block them.
+- Confirmed deliveries are final: preserve their saved evidence and never require refresh.
 - US English and amazon.com only for the first adapter.
 - One installation, one account, one persistent browser owner.
 - Output configuration/setup tests are authorized now; keep automatic sends gated on event evidence.
@@ -110,3 +111,12 @@ An authenticated disposable Mosquitto subscriber received the test; a new subscr
 received no retained replay, and an incorrect password was rejected. Container
 readiness and viewer security checks passed. Telegram tests use simulated responses;
 no real bot/chat was contacted. Automatic delivery announcements remain disabled.
+
+## Final delivered records
+
+On September 26 the user clarified that a confirmed delivery should not require more
+checks. The regression first reproduced an old delivery being marked stale. It now
+verifies that delivery status and timestamps remain unchanged across aging, database
+reopening, unknown/different later labels, and absence from subsequent scans. Delivered
+records have no freshness timeout; unfinished packages keep the existing refresh policy.
+This uses saved evidence and synthetic tests, without another Amazon scan.

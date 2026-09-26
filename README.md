@@ -44,8 +44,11 @@ Relative labels such as “today” include the observation time so they do not 
 change meaning tomorrow. Month/day labels retain Amazon's wording without guessing a year.
 Repeated scans update existing packages instead of creating duplicates. Missing links
 do not cause packages to be marked delivered, cancelled, or deleted.
-If a later scan cannot confirm a previously observed delivery, its saved delivered
-fact remains visible with a needs-refresh label. Historical deliveries do not generate
+Confirmed deliveries are final: their saved status and observation time survive restarts
+without a needs-refresh label. Later scans leave those records unchanged. Recent-order
+pages may still include delivered packages while discovering unfinished shipments;
+the tracker does not open individual delivered-package pages to recheck them.
+Historical deliveries do not generate
 announcements; no notification event engine is enabled yet.
 
 The verifier requires a protected orders page with visible orders/search controls,
