@@ -18,9 +18,11 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from amazon_tracker.browser import BrowserBusy, BrowserManager, BrowserUnavailable, SessionRequired
 from amazon_tracker.build_info import build_info
 from amazon_tracker.config import Settings
+from amazon_tracker.live_state import LiveState
 from amazon_tracker.notification_config import OUTPUTS, NotificationConfig
 from amazon_tracker.notifications import NotificationTests
 from amazon_tracker.session import SessionResult
+from amazon_tracker.shipments import shipment_candidate
 from amazon_tracker.storage import Store
 
 
@@ -41,6 +43,70 @@ class Runtime:
         self.task: asyncio.Task[None] | None = None
         self.discovery_revalidated = False
         self.build = build_info()
+        self.live_states: dict[str, tuple[LiveState, datetime, str]] = {}
+        self.live_context = self.browser.context
+        self.browser.on_live_state = self.observe_live_state
+
+    def observe_live_state(self, url: str, state: LiveState, observed: datetime) -> None:
+        """Accept response evidence only for a discovered, unfinished shipment."""
+        candidate = shipment_candidate(url, self.store.secret)
+        if candidate is None:
+            return
+        known = next(
+            (row for row in self.store.shipments() if row["shipment_id"] == candidate.shipment_id),
+            None,
+        )
+        if known is None or known["status"] == "delivered":
+            return
+        if self.live_context is not self.browser.context:
+            self.live_states.clear()
+            self.live_context = self.browser.context
+        previous = self.live_states.get(candidate.shipment_id)
+        if previous is not None and observed <= previous[1]:
+            return
+        if state.status == "delivered":
+            self.store.confirm_delivery(candidate.shipment_id, observed.isoformat())
+            self.live_states.pop(candidate.shipment_id, None)
+        else:
+            self.live_states[candidate.shipment_id] = (state, observed, url)
+
+    def shipments(self) -> list[dict[str, Any]]:
+        """Overlay short-lived counts; confirmed delivery remains durable and final."""
+        rows = self.store.shipments(
+            revalidated=self.discovery_revalidated
+            and self.browser.running
+            and self.session.state == "authenticated"
+        )
+        context = self.browser.context
+        open_urls = (
+            {page.url for page in context.pages if not page.is_closed()} if context else set()
+        )
+        for row in rows:
+            row["arrival_phase"] = "unknown"
+            live = self.live_states.get(row["shipment_id"])
+            if row["status"] == "delivered" or live is None:
+                continue
+            state, observed, url = live
+            fresh = (
+                context is not None
+                and context is self.live_context
+                and url in open_urls
+                and (datetime.now(UTC) - observed).total_seconds() <= 120
+            )
+            row.update(
+                status=state.status if fresh else "unknown",
+                status_observed_at=observed.isoformat(),
+                status_checked_at=observed.isoformat(),
+                observed_at=observed.isoformat(),
+                stops_remaining=state.stops_remaining if fresh else None,
+                arrival_phase=state.arrival_phase if fresh else "unknown",
+                tracking_visibility=(
+                    "stops_available" if fresh and state.stops_remaining is not None else "unknown"
+                ),
+                stale_after_seconds=120,
+                is_stale=not fresh or state.status == "unknown",
+            )
+        return rows
 
     def submit(self, action: str) -> None:
         """Coalesce identical requests and reject conflicting browser work."""
@@ -224,11 +290,7 @@ def create_app(settings: Settings | None = None, *, start_browser: bool = True) 
     async def shipments(request: Request) -> list[dict[str, Any]]:
         """List discovered packages without leaking order numbers or signed links."""
         runtime: Runtime = request.app.state.runtime
-        return runtime.store.shipments(
-            revalidated=runtime.discovery_revalidated
-            and runtime.browser.running
-            and runtime.session.state == "authenticated"
-        )
+        return runtime.shipments()
 
     @app.post("/api/v1/refresh", status_code=202)
     async def refresh(request: Request) -> JSONResponse:

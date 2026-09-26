@@ -2,18 +2,22 @@
 
 import asyncio
 import fcntl
+import json
 import time
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Literal
+from urllib.parse import parse_qs, urlsplit
 
-from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
+from playwright.async_api import BrowserContext, Page, Playwright, Response, async_playwright
 
 from amazon_tracker.config import ORDERS_URL, Settings
 from amazon_tracker.delivery import DeliveryStatus
 from amazon_tracker.discovery import DiscoveryResult, next_orders_page, tracking_observations
+from amazon_tracker.live_state import LiveState, parse_live_state
 from amazon_tracker.session import SessionResult, inspect_session
 
 
@@ -51,6 +55,8 @@ class BrowserManager:
         self.interactive_page: Page | None = None
         self.discovery_starts: deque[float] = deque()
         self.last_discovery_navigation: float = 0
+        self.on_live_state: Callable[[str, LiveState, datetime], None] | None = None
+        self.response_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def running(self) -> bool:
@@ -92,6 +98,7 @@ class BrowserManager:
                 timeout=30000,
             )
             self.context.on("close", self._disconnected)
+            self.context.on("response", self._response)
             self.context.set_default_timeout(15000)
             self.context.set_default_navigation_timeout(30000)
             # Keep one page alive: closing the final headed tab exits Chromium.
@@ -115,6 +122,60 @@ class BrowserManager:
         self.mode = "idle"
         self.interactive_until = 0
         self.error = "browser_disconnected"
+        for task in self.response_tasks:
+            task.cancel()
+
+    def _response(self, response: Response) -> None:
+        """Observe only Amazon's existing map requests; never initiate a request."""
+        if (
+            response.url
+            != (
+                "https://www.amazon.com/progress-tracker/package/actions/package-location/get-state"
+            )
+            or response.request.method != "POST"
+        ):
+            return
+        task = asyncio.create_task(self._read_live_response(response, datetime.now(UTC)))
+        self.response_tasks.add(task)
+        task.add_done_callback(self.response_tasks.discard)
+
+    async def _read_live_response(self, response: Response, observed: datetime) -> None:
+        """Bind minimal state to its top-level shipment and discard the private body."""
+        try:
+            frame = response.request.frame
+            page = frame.page
+            url = page.url
+            parsed = urlsplit(url)
+            if (
+                frame != page.main_frame
+                or parsed.scheme != "https"
+                or parsed.netloc != "www.amazon.com"
+                or parsed.path != "/progress-tracker/package"
+            ):
+                return
+            body = response.request.post_data or ""
+            if len(body) > 16384:
+                return
+            query = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=100)
+            form = parse_qs(body, keep_blank_values=True, max_num_fields=100)
+            shipment = query.get("shipmentId", [])
+            if len(shipment) != 1 or not shipment[0] or form.get("shipmentId") != shipment:
+                return
+            state = LiveState()
+            if response.status == 200:
+                async with asyncio.timeout(10):
+                    raw = await response.body()
+                if len(raw) <= 1024 * 1024:
+                    try:
+                        state = parse_live_state(json.loads(raw))
+                    except (ValueError, UnicodeError):
+                        pass
+            if self.context is not None and not page.is_closed() and page.url == url:
+                if self.on_live_state:
+                    self.on_live_state(url, state, observed)
+        except Exception:
+            # Browser errors can contain URLs, tokens, or response text. Counts expire.
+            return
 
     async def page(self, name: str) -> Page:
         """Reuse a named page in the single context."""
@@ -248,6 +309,10 @@ class BrowserManager:
         try:
             if self.context:
                 await self.context.close()
+            pending = list(self.response_tasks)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
             if self.playwright:
                 await self.playwright.stop()
                 self.playwright = None

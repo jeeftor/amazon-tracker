@@ -4,12 +4,13 @@ Your Amazon browser stays in a local Docker service. Planned outputs include MQT
 for Home Assistant and direct Telegram notifications: “Amazon is 3 stops away” and
 “Package delivered.”
 
-**Current milestone: persistent login, delivered status, and notification setup.**
+**Current milestone: persistent login, passive live tracking, and notification setup.**
 You can open Amazon, complete login or challenges through embedded noVNC, verify your
 session, and discover package tracking links across recent orders. Each shipment gets
 its own stable private ID, including split shipments from one order. Orders-page labels
 such as **Delivered September 12** now populate each package's status. You can configure
-and explicitly test MQTT and Telegram. Live stop counts and automatic delivery
+and explicitly test MQTT and Telegram. Live counts can update while you keep a known
+package's tracking page open in the embedded browser. Automatic delivery
 announcements are **not implemented yet**.
 See the [acceptance record](docs/acceptance.md) for actual local and live evidence.
 
@@ -50,6 +51,20 @@ pages may still include delivered packages while discovering unfinished shipment
 the tracker does not open individual delivered-package pages to recheck them.
 Historical deliveries do not generate
 announcements; no notification event engine is enabled yet.
+
+### Watch a live delivery
+
+After discovering your packages, select **Open Amazon / Login** and open **Track
+package** for an unfinished package in the embedded browser. Keep that tracking page
+open. Your panel observes Amazon's own updates and shows available stop counts or
+**You are the next stop**. Multiple open package pages keep separate shipment state.
+Counts disappear after two minutes without updates, when you leave the source page,
+or when its browser restarts. The tracker does not reopen tracking tabs automatically yet.
+
+Amazon's explicit delivered status clears the count and saves the package as final,
+even if the response still contains a remaining stop. Your login and delivery facts
+survive restarts; transient live counts must be observed again. The installed observer
+still needs a future live delivery for end-to-end Docker acceptance.
 
 The verifier requires a protected orders page with visible orders/search controls,
 or both an orders-page marker and a signed-in account marker for the older layout.

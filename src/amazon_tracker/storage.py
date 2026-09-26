@@ -158,6 +158,16 @@ class Store:
                 "(SELECT id FROM discovery_runs ORDER BY id DESC LIMIT 1000)"
             )
 
+    def confirm_delivery(self, shipment_id: str, observed_at: str) -> None:
+        """Finalize a known shipment once, without inventing a delivery date."""
+        with self.connection:
+            self.connection.execute(
+                "UPDATE shipments SET delivery_status='delivered', delivery_date_label=NULL, "
+                "status_observed_at=?, status_checked_at=? "
+                "WHERE shipment_id=? AND delivery_status != 'delivered'",
+                (observed_at, observed_at, shipment_id),
+            )
+
     def last_discovery(self) -> dict[str, Any] | None:
         """Return counts and scan coverage without exposing private tracking links."""
         row = self.connection.execute(

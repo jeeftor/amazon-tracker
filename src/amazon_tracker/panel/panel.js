@@ -63,6 +63,11 @@ async function refresh() {
           description = date === "today" || date === "yesterday"
             ? `Delivered — Amazon said “${date}” when checked ${checked}`
             : `Delivered ${date || ""}`.trim();
+        } else if (shipment.status === "out_for_delivery") {
+          description = shipment.arrival_phase === "arriving_next" ? "You are the next stop"
+            : shipment.stops_remaining !== null
+              ? `${shipment.stops_remaining} ${shipment.stops_remaining === 1 ? "stop" : "stops"} away`
+              : "Out for delivery — stop count unavailable";
         }
         item.textContent = `${shipment.shipment_id} — ${description}`
           + (shipment.is_stale ? " (saved result; needs refresh)" : "");

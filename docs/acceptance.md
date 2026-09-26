@@ -24,21 +24,21 @@ evidence separately from the plan's proposed behavior.
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local control, ownership, discovery, notification tests | Passed | 62 tests; Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium; failed migration rolls back all DDL |
+| Local control, ownership, discovery, notification tests | Passed | Ruff formatting/lint; strict mypy; synthetic cookie persistence in Chromium; failed migration rolls back all DDL; current observer checks recorded below |
 | Container stack | Passed | Image built; UID 1000; profile/state 0700; sandboxed browser startup; noVNC visually connected |
 | A: real Amazon login persistence | Passed | After manual login, the whole container was recreated with the same volume; the protected orders page verified authenticated without another login at 2026-09-25T20:41:31Z |
 | Shipment discovery | Passed for observed link shapes | Two complete recent-order scans, including one after whole-container replacement, returned the same shipment IDs and split-order groups with no unsupported links |
-| B/C: real stop source and transitions | Not started | A real live delivery page; several observed changes without private endpoint replay |
+| B/C: real stop source and transitions | Source observed in user's browser; Docker integration pending | September 26 response samples and screenshots show count changes, next stop, and delivered; Docker transport metadata confirms periodic XHR, but automated response-to-state transitions still need a live package |
 | Basic delivered status | Passed for observed labels; deployed | User authorized ordinary delivered-status checks separately from live stop counts; authenticated three-page scan confirmed historical deliveries including September 12; sanitized fixtures cover dates, split shipments, hidden labels, and migration |
-| Live stop fixtures and event engine | Gated | Real stop transitions before committing the live-map parser |
+| Live stop fixtures and event engine | Parser/observer fixtures implemented; event engine pending | Sanitized observed shapes; intercepted Chromium response pipeline; no real automatic announcements |
 | Notification configuration and tests | Implemented; local checks passed | Settings persistence/precedence/secret safety; simulated Telegram responses; disposable authenticated Mosquitto publish, rejected bad password, no retained test replay |
 | Automatic MQTT, Telegram, Home Assistant announcements | Pending | Deterministic event engine, broker/HA restart checks, actual destination setup and delivery; stop counts still need a live source |
 | Security review | Completed for current scope | Two viewer issues fixed; local disposable-container regression passed; Python dependency audit reported no known vulnerabilities; remote deployment remains blocked on authentication |
 | GitHub workflows | Hosted evidence tracked in Actions | actionlint 1.7.12 passed; each pinned JavaScript action declares Node 24; native amd64/arm64 builds and smoke tests passed in [the initial run](https://github.com/jeeftor/amazon-tracker/actions/runs/36189432697); see [latest branch runs](https://github.com/jeeftor/amazon-tracker/actions?query=branch%3Afeature%2Fpersistent-browser) for Python runner fixes and current status |
 
 Synthetic persistent-cookie tests do not establish Amazon session persistence.
-No claims about real stop counts, new-delivery event transitions, or Home Assistant
-acceptance are made.
+User-provided real stop evidence is separate from automated Docker extraction,
+new-delivery event transitions, and Home Assistant acceptance.
 
 ## Live observation: access notice
 
@@ -120,3 +120,28 @@ verifies that delivery status and timestamps remain unchanged across aging, data
 reopening, unknown/different later labels, and absence from subsequent scans. Delivered
 records have no freshness timeout; unfinished packages keep the existing refresh policy.
 This uses saved evidence and synthetic tests, without another Amazon scan.
+
+## September 26 live delivery source
+
+The user supplied live screenshots and response samples containing numeric stops 3,
+2, next-stop wording with 1, and finally `status: DELIVERED` with a leftover count of
+1. The final page also showed delivered. These establish response shapes; screenshot
+selection order does not prove exact event timing. No request token or raw shipment,
+order, tracking, address, product, or coordinate data is included in fixtures.
+
+Docker Chromium resource timing showed four HTTP-200 XHRs to the get-state endpoint
+at approximately 30-second spacing. A temporary injected observer missed their bodies;
+the initial diagnosis that the Docker page made no requests was incorrect. This is
+transport evidence, not successful automated count extraction. There was one manual
+refresh during research; no private API replay was performed.
+
+The passive Playwright response listener is tested with an isolated intercepted
+Chromium page. Tests cover observed counts, missing counts, next stop, delivery with
+count 1, wrong shipment/method, independent packages, navigation/age freshness,
+out-of-order completion timestamps, no additional requests, ignored post-delivery
+updates, and database reopening. Parser tests also cover malformed envelopes and
+count/callout conflicts. Automatic notifications remain disabled. Another live
+package is needed to verify the installed listener through real count transitions.
+
+The September 26 local gate passed all 74 tests, Ruff formatting/lint, and strict mypy.
+This includes both delivered-final-state and passive response-observer changes.

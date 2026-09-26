@@ -52,6 +52,7 @@ FastAPI + small static panel
 | `session.py` | Login/challenge/protected-orders classification |
 | `discovery.py` | Visible tracking anchors, package-scoped delivery labels, pagination |
 | `delivery.py` | Conservative delivered-label normalization |
+| `live_state.py` | Minimal normalization of observed map responses; no location retention |
 | `shipments.py` | Shipment-specific source keys and installation HMAC IDs |
 | `storage.py` | Schema migrations, durable identities, private links, public freshness |
 | `app.py` | Operation coalescing, human takeover, sanitized REST state |
@@ -60,7 +61,7 @@ FastAPI + small static panel
 | `panel/` | Local login and package discovery UI |
 | `docker/` | Supervised display/VNC stack and Chromium sandbox profile |
 
-Continuous scheduling, tracking-page observers, broader delivery-state parsing, event history,
+Continuous scheduling, automatic tracking-tab management, broader delivery-state parsing, event history,
 and automatic notification dispatch are still pending. Output settings and explicit
 transport tests are implemented. Discovering a tracking link alone
 does not prove a package's state; delivered status requires its own visible label.
@@ -100,7 +101,7 @@ Migrations use an explicit SQLite transaction so a failed ALTER cannot leave the
 database with only some of the new columns.
 
 Tracking URLs remain private in SQLite. REST exposes IDs, grouping IDs, recognized
-delivered status/date labels, null stops, observation time, and staleness. Unfinished records
+delivery status/date labels, fresh live counts, observation time, and staleness. Unfinished records
 start stale until revalidated during the current process lifetime. Confirmed deliveries
 are final, with `is_stale=false` and `stale_after_seconds=null`. Absent packages are
 not deleted or marked delivered. Shipment retirement/retention awaits the delivery
@@ -129,6 +130,30 @@ Initial historical deliveries establish dashboard state; they are not new delive
 events. Return/cancellation handling and notification transitions remain separate work.
 
 ## Adding parser behavior
+
+The September 26 live delivery established `value.mapState` in the page's existing
+POST `/progress-tracker/package/actions/package-location/get-state` responses as a
+stop source. The context response listener observes this exact HTTPS endpoint. It
+requires a top-level progress-tracker page and matching single `shipmentId` fields
+in the page query and request body. Only already-discovered shipments are accepted.
+Request fields remain in memory; credentials, arbitrary labels, and location timelines
+are discarded. The observer never creates a request, replays a token, reloads a page,
+or navigates a tracking tab. Body reads have a ten-second timeout; decoded bodies over
+one MiB are not parsed (Playwright still buffers the response before this check).
+
+Live counts require a matching numeric count and recognized callout. `PICKED_UP`
+means out for delivery; next-stop wording is a separate arrival phase. `DELIVERED`
+overrides any leftover count and durably finalizes the known shipment. It does not
+invent a delivery date. Further observations for final records are ignored. Amazon's
+own page can continue its requests until you close it.
+
+Nonterminal observations are process-local, expire after 120 seconds, and are not
+current after their source page closes/navigates away or its browser context changes.
+Failed/unrecognized responses remove usable counts; missing responses expire them.
+Response receipt time prevents an older body completing late from overwriting newer
+evidence. No automatic tracking-page reopening, event history, or notifications are
+implemented in this milestone. Real Docker count-to-delivery acceptance requires a
+future live package; synthetic browser tests do not satisfy that gate.
 
 1. Identify the exact visible state and source on a real page.
 2. Minimize the captured evidence. Keep account names, addresses, product titles,

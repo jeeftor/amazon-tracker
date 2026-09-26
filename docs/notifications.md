@@ -7,7 +7,9 @@ These are agreed requirements with implementation status below. They extend the 
 secrets, and user-triggered MQTT/Telegram test messages. Both outputs remain quiet
 on save/startup. Test status does not claim an ongoing connection.
 **Pending:** automatic event generation/dispatch, MQTT state/availability/discovery,
-Home Assistant automation, live stop counts, and real destination acceptance.
+Home Assistant automation, automatic tracking-tab management, and real destination acceptance.
+Passive live counts are available while a discovered package's tracking page remains
+open in the embedded browser; see [the acceptance record](acceptance.md) for live evidence limits.
 
 ## Outputs
 
